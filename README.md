@@ -4,6 +4,25 @@ Modern network latency monitoring — a spiritual successor to SmokePing.
 
 ---
 
+## Screenshots
+
+**Public dashboard — overview**
+![Overview](docs/screenshots/public-overview.png)
+
+**Public dashboard — group view**
+![Group view](docs/screenshots/public-group.png)
+
+**Public dashboard — target detail**
+![Target detail](docs/screenshots/public-target.png)
+
+**Admin — dashboard**
+![Admin dashboard](docs/screenshots/admin-dashboard.png)
+
+**Admin — targets**
+![Admin targets](docs/screenshots/admin-targets.png)
+
+---
+
 ## Architecture
 
 ```
