@@ -42,6 +42,14 @@ const SettingsSchema = z.object({
   banner_enabled: z.boolean().optional(),
   banner_text: z.string().max(500).optional().nullable(),
   banner_type: z.enum(['info', 'warning', 'maintenance']).optional(),
+  public_base_url: z.string().url().max(255).optional().nullable(),
+});
+
+const NotificationChannelSchema = z.object({
+  name: z.string().min(1).max(100),
+  type: z.enum(['webhook', 'slack', 'discord', 'ntfy', 'telegram']),
+  url: z.string().min(1).max(1000),
+  enabled: z.union([z.boolean(), z.number().int().min(0).max(1)]).default(1),
 });
 
 const ResultsRangeSchema = z.enum(['1h', '6h', '12h', '24h', '7d', '30d', '3mo']);
@@ -61,6 +69,7 @@ module.exports = {
   CreateUserSchema,
   ChangePasswordSchema,
   SettingsSchema,
+  NotificationChannelSchema,
   ResultsRangeSchema,
   OrderSchema,
   EnabledSchema,

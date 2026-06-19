@@ -55,6 +55,10 @@ export function useSettings() {
   return useQuery({ queryKey: ['admin-settings'], queryFn: () => apiFetch('/api/admin/settings') });
 }
 
+export function useNotificationChannels() {
+  return useQuery({ queryKey: ['admin-notifications'], queryFn: () => apiFetch('/api/admin/notifications') });
+}
+
 // Generic mutation helper
 export function useMutate(queryKeysToInvalidate = []) {
   const qc = useQueryClient();

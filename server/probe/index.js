@@ -9,6 +9,8 @@ const { recalcUptime } = require('./uptime');
 const { rollup5Min, rollup1Hour, runRetention, backfillAggregates } = require('./rollup');
 const { runTraceroute } = require('./traceroute');
 const { runTracerouteBackfill } = require('./traceroute-backfill');
+const { getStatus } = require('../shared/constants');
+const { fireStatusChange } = require('./notifier');
 const fs = require('fs');
 const path = require('path');
 
@@ -67,6 +69,14 @@ async function runProbe(target) {
     const db = getDb();
     let result;
 
+    // Snapshot previous status before this probe for change detection
+    const prevRow = db.prepare(
+      'SELECT packet_loss, dns_success, error FROM probe_results WHERE target_id = ? ORDER BY timestamp DESC LIMIT 1'
+    ).get(target.id);
+    const prevStatus = prevRow
+      ? getStatus(prevRow.packet_loss ?? null, prevRow.dns_success ?? null, target.probe_type, !!prevRow.error)
+      : null;
+
     if (target.probe_type === 'icmp') {
       result = await pingHost(target.host, target.packet_count);
       db.prepare(
@@ -93,6 +103,30 @@ async function runProbe(target) {
     }
 
     recalcUptime(target.id, target.probe_type);
+
+    // Fire notification on DOWN or recovery to UP
+    const newStatus = getStatus(
+      result.packet_loss ?? null,
+      result.dns_success ?? null,
+      target.probe_type,
+      !!result.error
+    );
+    // Notify on DOWN (any → DOWN) or recovery from DOWN only (DEGRADED→UP is silent)
+    const shouldNotify = prevStatus !== null
+      && prevStatus !== newStatus
+      && newStatus !== 'UNKNOWN'
+      && (newStatus === 'DOWN' || (newStatus === 'UP' && prevStatus === 'DOWN'));
+
+    if (shouldNotify) {
+      fireStatusChange({
+        targetId: target.id,
+        name: target.name,
+        host: target.host,
+        groupName: target.group_name,
+        prevStatus,
+        newStatus,
+      }).catch((err) => logger.warn({ err, targetId: target.id }, 'Notification dispatch failed'));
+    }
 
     logger.debug({ targetId: target.id, host: target.host }, 'Probe complete');
   } catch (err) {
@@ -124,7 +158,11 @@ function scheduleTarget(target, delayMs = 0) {
 function loadAndScheduleTargets() {
   const db = getDb();
   const targets = db.prepare(
-    'SELECT id, host, probe_type, interval_seconds, packet_count FROM targets WHERE enabled = 1'
+    `SELECT t.id, t.host, t.probe_type, t.interval_seconds, t.packet_count, t.name,
+            g.name AS group_name
+     FROM targets t
+     JOIN groups g ON g.id = t.group_id
+     WHERE t.enabled = 1`
   ).all();
 
   const currentIds = new Set(targets.map((t) => t.id));

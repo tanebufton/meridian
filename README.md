@@ -63,6 +63,8 @@ Modern network latency monitoring — a spiritual successor to SmokePing.
 - **Groups** — targets organised into groups, drag-and-drop reordering in admin
 - **Public dashboard** — read-only view with live search, group cards, per-target detail pages
 - **Admin panel** — full CRUD for groups and targets, bulk add/edit/enable/disable/delete, group-filtered and status-filtered views
+- **Notifications** — multi-channel alerts on DOWN and recovery; Slack, Discord, ntfy, Telegram, and generic webhooks
+- **Config import/export** — backup and restore all groups and targets as JSON
 - **Data retention** — configurable rolling windows for raw, 5-min, and 1-hour data
 - **Banner system** — info/warning/maintenance banners on the public dashboard
 - **Rate limiting and security headers** on both servers
@@ -201,6 +203,47 @@ Traceroutes run automatically at startup and once daily per target (refresh wind
 - Reverse DNS is resolved in parallel after the trace completes
 - Up to 50 historical path snapshots are retained per target
 - Private/RFC-1918 hops are hidden from the public view
+
+---
+
+## Notifications
+
+Meridian fires alerts when a target transitions to **DOWN** or recovers to **UP** (from DOWN). UP↔DEGRADED transitions are silent. Channels are configured in **Settings → Notification Channels**.
+
+### Supported channel types
+
+| Type | URL format |
+|---|---|
+| Slack | `https://hooks.slack.com/services/T.../B.../...` |
+| Discord | `https://discord.com/api/webhooks/ID/TOKEN` |
+| ntfy | `https://ntfy.sh/TOPICNAME` (or self-hosted) |
+| Telegram | `tgram://BOTTOKEN/CHATID` |
+| Generic webhook | Any `https://` or `http://` URL |
+
+Slack and Discord messages are posted as **Meridian**. ntfy notifications include a tappable link when a public base URL is configured.
+
+### Public base URL
+
+Set the public-facing URL of your dashboard (e.g. `https://status.example.com`) in Settings → Notification Channels. When set, every notification includes a direct link to the affected target's detail page.
+
+### Flood protection
+
+If more than 5 notifications fire within 60 seconds — for example during a mass outage or a mass recovery — further notifications are suppressed for 5 minutes. This prevents notification spam when many targets change state simultaneously.
+
+### Generic webhook payload
+
+```json
+{
+  "target": "Google DNS",
+  "host": "8.8.8.8",
+  "group": "DNS Resolvers",
+  "status": "DOWN",
+  "previous_status": "UP",
+  "message": "🔴 Google DNS is DOWN — 8.8.8.8 (DNS Resolvers) [UP → DOWN]",
+  "target_url": "https://status.example.com/target/5",
+  "timestamp": "2026-06-19T10:00:00.000Z"
+}
+```
 
 ---
 

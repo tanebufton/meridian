@@ -97,6 +97,15 @@ CREATE INDEX IF NOT EXISTS idx_probe_results_target_timestamp ON probe_results(t
 -- Also improves rollup cross-target timestamp scan
 CREATE INDEX IF NOT EXISTS idx_probe_results_timestamp ON probe_results(timestamp);
 
+CREATE TABLE IF NOT EXISTS notification_channels (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  type       TEXT NOT NULL CHECK(type IN ('webhook','slack','discord','ntfy','telegram')),
+  url        TEXT NOT NULL,
+  enabled    INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
 -- Per-target per-resolution range queries (24h/7d/30d chart data)
 -- Column order: target_id → resolution → period_start lets SQLite satisfy
 -- all three predicates without a separate filter pass

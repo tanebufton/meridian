@@ -90,6 +90,7 @@ async function start() {
   await app.register(require('./routes/users'), { prefix: '/api/admin' });
   await app.register(require('./routes/settings'), { prefix: '/api/admin' });
   await app.register(require('./routes/config'), { prefix: '/api/admin' });
+  await app.register(require('./routes/notifications'), { prefix: '/api/admin' });
 
   // SPA fallback
   app.setNotFoundHandler(async (req, reply) => {

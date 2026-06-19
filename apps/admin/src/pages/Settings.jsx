@@ -1,8 +1,113 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSettings, useUsers, useMutate, apiFetch } from '../hooks/useApi';
+import { useSettings, useUsers, useNotificationChannels, useMutate, apiFetch } from '../hooks/useApi';
 import Toggle from '../components/Toggle';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
+
+const CHANNEL_TYPES = ['webhook', 'slack', 'discord', 'ntfy', 'telegram'];
+
+const CHANNEL_PLACEHOLDERS = {
+  webhook: 'https://your-service.example.com/webhook',
+  slack: 'https://hooks.slack.com/services/T.../B.../...',
+  discord: 'https://discord.com/api/webhooks/ID/TOKEN',
+  ntfy: 'https://ntfy.sh/your-topic',
+  telegram: 'tgram://BOTTOKEN/CHATID',
+};
+
+function ChannelModal({ channel, onSave, onClose }) {
+  const [form, setForm] = useState({
+    name: channel?.name || '',
+    type: channel?.type || 'webhook',
+    url: channel?.url || '',
+    enabled: channel != null ? !!channel.enabled : true,
+  });
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const mut = useMutate(['admin-notifications']);
+
+  function setF(k, v) { setForm((f) => ({ ...f, [k]: v })); setTestResult(null); }
+
+  async function submit(e) {
+    e.preventDefault();
+    try {
+      const url = channel
+        ? `/api/admin/notifications/${channel.id}`
+        : '/api/admin/notifications';
+      const method = channel ? 'PUT' : 'POST';
+      await mut.mutateAsync({ url, method, body: form });
+      onSave();
+    } catch (err) { alert(err.message); }
+  }
+
+  async function handleTest() {
+    if (!form.url) { setTestResult({ ok: false, msg: 'Enter a URL first' }); return; }
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const testUrl = channel
+        ? `/api/admin/notifications/${channel.id}/test`
+        : '/api/admin/notifications/test-channel';
+      const body = channel ? {} : { type: form.type, url: form.url };
+      await apiFetch(testUrl, { method: 'POST', body });
+      setTestResult({ ok: true, msg: 'Test sent successfully' });
+    } catch (err) {
+      setTestResult({ ok: false, msg: err.message });
+    } finally { setTesting(false); }
+  }
+
+  return (
+    <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-title">{channel ? 'Edit Channel' : 'Add Notification Channel'}</div>
+        <form onSubmit={submit}>
+          <div className="field">
+            <label>Name</label>
+            <input value={form.name} onChange={(e) => setF('name', e.target.value)} required placeholder="e.g. Discord alerts" />
+          </div>
+          <div className="field">
+            <label>Type</label>
+            <select value={form.type} onChange={(e) => setF('type', e.target.value)}>
+              {CHANNEL_TYPES.map((t) => (
+                <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>URL</label>
+            <input
+              value={form.url}
+              onChange={(e) => setF('url', e.target.value)}
+              required
+              placeholder={CHANNEL_PLACEHOLDERS[form.type]}
+              style={{ fontFamily: 'monospace', fontSize: 12 }}
+            />
+            {form.type === 'telegram' && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                Get your bot token from @BotFather. Find your chat ID via @userinfobot.
+              </div>
+            )}
+          </div>
+          <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Toggle checked={form.enabled} onChange={(v) => setF('enabled', v)} />
+            <span style={{ fontSize: 13 }}>Enabled</span>
+          </div>
+          {testResult && (
+            <div style={{ fontSize: 12, color: testResult.ok ? 'var(--success)' : 'var(--danger)', marginBottom: 8 }}>
+              {testResult.msg}
+            </div>
+          )}
+          <div className="modal-actions">
+            <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn-ghost" disabled={testing} onClick={handleTest}>
+              {testing ? 'Sending…' : 'Test'}
+            </button>
+            <button type="submit" disabled={mut.isPending}>{mut.isPending ? 'Saving…' : 'Save'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 function UserModal({ onSave, onClose }) {
   const [username, setUsername] = useState('');
@@ -65,14 +170,18 @@ function PasswordModal({ user, onSave, onClose }) {
 export default function Settings() {
   const settings = useSettings();
   const users = useUsers();
+  const notifications = useNotificationChannels();
   const { toasts, toast } = useToast();
   const [form, setForm] = useState(null);
   const [addingUser, setAddingUser] = useState(false);
   const [changingPwFor, setChangingPwFor] = useState(null);
+  const [editingChannel, setEditingChannel] = useState(null);
+  const [addingChannel, setAddingChannel] = useState(false);
   const settingsMut = useMutate(['admin-settings']);
   const deleteMut = useMutate(['admin-users']);
   const applyMut = useMutate(['admin-targets']);
   const backfillMut = useMutate([]);
+  const channelMut = useMutate(['admin-notifications']);
   const importMut = useMutate(['admin-groups', 'admin-targets']);
   const fileInputRef = useRef(null);
   const [importing, setImporting] = useState(false);
@@ -122,6 +231,43 @@ export default function Settings() {
     try {
       await deleteMut.mutateAsync({ url: `/api/admin/users/${u.id}`, method: 'DELETE' });
       toast('User deleted');
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  async function deleteChannel(ch) {
+    if (!confirm(`Delete channel "${ch.name}"?`)) return;
+    try {
+      await channelMut.mutateAsync({ url: `/api/admin/notifications/${ch.id}`, method: 'DELETE' });
+      toast('Channel deleted');
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  async function testChannel(ch) {
+    try {
+      await apiFetch(`/api/admin/notifications/${ch.id}/test`, { method: 'POST', body: {} });
+      toast(`Test sent to "${ch.name}"`);
+    } catch (err) { toast(`Test failed: ${err.message}`, 'error'); }
+  }
+
+  async function toggleChannel(ch) {
+    try {
+      await channelMut.mutateAsync({
+        url: `/api/admin/notifications/${ch.id}/enabled`,
+        method: 'PATCH',
+        body: { enabled: !ch.enabled },
+      });
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  async function saveNotifSettings(e) {
+    e.preventDefault();
+    try {
+      await settingsMut.mutateAsync({
+        url: '/api/admin/settings',
+        method: 'PUT',
+        body: { public_base_url: form.public_base_url || null },
+      });
+      toast('Notification settings saved');
     } catch (err) { toast(err.message, 'error'); }
   }
 
@@ -273,6 +419,69 @@ export default function Settings() {
         </button>
       </div>
 
+      {/* Notification Channels */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 600 }}>Notification Channels</h2>
+          <button onClick={() => setAddingChannel(true)}>+ Add Channel</button>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+          Send alerts when a target goes DOWN or recovers. Supports Slack, Discord, ntfy, Telegram, and generic webhooks.
+        </p>
+        <form onSubmit={saveNotifSettings} style={{ marginBottom: 20 }}>
+          <div className="field" style={{ maxWidth: 420 }}>
+            <label>Public base URL <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>— optional</span></label>
+            <input
+              value={form?.public_base_url || ''}
+              onChange={(e) => setF('public_base_url', e.target.value || null)}
+              placeholder="https://status.example.com"
+            />
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              When set, notifications include a direct link to the affected target's detail page.
+            </div>
+          </div>
+          <button type="submit" className="btn-ghost" disabled={settingsMut.isPending}>
+            {settingsMut.isPending ? 'Saving…' : 'Save'}
+          </button>
+        </form>
+        {notifications.data?.length > 0 ? (
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>URL</th>
+                <th>Enabled</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {notifications.data.map((ch) => (
+                <tr key={ch.id}>
+                  <td style={{ fontWeight: 500 }}>{ch.name}</td>
+                  <td style={{ fontSize: 12 }}>{ch.type}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {ch.url}
+                  </td>
+                  <td>
+                    <Toggle checked={!!ch.enabled} onChange={() => toggleChannel(ch)} />
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn-ghost btn-sm" onClick={() => testChannel(ch)}>Test</button>
+                      <button className="btn-ghost btn-sm" onClick={() => setEditingChannel(ch)}>Edit</button>
+                      <button className="btn-danger btn-sm" onClick={() => deleteChannel(ch)}>Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No channels configured yet.</p>
+        )}
+      </div>
+
       {/* Import / Export */}
       <div className="card" style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Import / Export</h2>
@@ -344,6 +553,19 @@ export default function Settings() {
           user={changingPwFor}
           onSave={() => { setChangingPwFor(null); toast('Password changed'); }}
           onClose={() => setChangingPwFor(null)}
+        />
+      )}
+      {addingChannel && (
+        <ChannelModal
+          onSave={() => { setAddingChannel(false); toast('Channel added'); }}
+          onClose={() => setAddingChannel(false)}
+        />
+      )}
+      {editingChannel && (
+        <ChannelModal
+          channel={editingChannel}
+          onSave={() => { setEditingChannel(null); toast('Channel updated'); }}
+          onClose={() => setEditingChannel(null)}
         />
       )}
 
