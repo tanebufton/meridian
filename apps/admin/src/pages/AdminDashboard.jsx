@@ -28,10 +28,11 @@ export default function AdminDashboard() {
   const deleteMut = useMutate(['admin-targets']);
 
   const all = targets.data || [];
+  const enabled = all.filter((t) => t.enabled);
   const counts = { UP: 0, DEGRADED: 0, DOWN: 0, UNKNOWN: 0 };
-  for (const t of all) counts[t.status] = (counts[t.status] || 0) + 1;
+  for (const t of enabled) counts[t.status] = (counts[t.status] || 0) + 1;
 
-  const problems = all
+  const problems = enabled
     .filter((t) => t.status === 'DOWN' || t.status === 'DEGRADED')
     .sort((a, b) => (a.status === 'DOWN' ? -1 : 1) - (b.status === 'DOWN' ? -1 : 1) || a.name.localeCompare(b.name));
 

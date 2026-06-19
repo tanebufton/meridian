@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useSettings, useUsers, useMutate } from '../hooks/useApi';
+import { useState, useEffect, useRef } from 'react';
+import { useSettings, useUsers, useMutate, apiFetch } from '../hooks/useApi';
 import Toggle from '../components/Toggle';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
@@ -73,6 +73,9 @@ export default function Settings() {
   const deleteMut = useMutate(['admin-users']);
   const applyMut = useMutate(['admin-targets']);
   const backfillMut = useMutate([]);
+  const importMut = useMutate(['admin-groups', 'admin-targets']);
+  const fileInputRef = useRef(null);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     if (settings.data && !form) setForm(settings.data);
@@ -120,6 +123,53 @@ export default function Settings() {
       await deleteMut.mutateAsync({ url: `/api/admin/users/${u.id}`, method: 'DELETE' });
       toast('User deleted');
     } catch (err) { toast(err.message, 'error'); }
+  }
+
+  async function handleExport() {
+    try {
+      const data = await apiFetch('/api/admin/config/export');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `meridian-config-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  async function handleImportFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+
+    let parsed;
+    try {
+      const text = await file.text();
+      parsed = JSON.parse(text);
+    } catch {
+      toast('Could not parse file — must be valid JSON', 'error');
+      return;
+    }
+
+    const groupCount = parsed?.groups?.length ?? 0;
+    const targetCount = parsed?.groups?.reduce((sum, g) => sum + (g.targets?.length ?? 0), 0) ?? 0;
+
+    if (!confirm(
+      `WARNING: This will permanently delete all existing groups and targets and replace them with:\n\n` +
+      `  • ${groupCount} group${groupCount !== 1 ? 's' : ''}\n` +
+      `  • ${targetCount} target${targetCount !== 1 ? 's' : ''}\n\n` +
+      `This cannot be undone. Continue?`
+    )) return;
+
+    setImporting(true);
+    try {
+      const res = await importMut.mutateAsync({ url: '/api/admin/config/import', method: 'POST', body: parsed });
+      toast(`Imported ${res.imported.groups} groups and ${res.imported.targets} targets`);
+    } catch (err) { toast(err.message, 'error'); }
+    finally { setImporting(false); }
   }
 
   if (settings.isLoading || users.isLoading || !form) return <div className="spinner" />;
@@ -221,6 +271,33 @@ export default function Settings() {
         >
           {backfillMut.isPending ? 'Starting…' : 'Run Traceroute Backfill'}
         </button>
+      </div>
+
+      {/* Import / Export */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Import / Export</h2>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+          Export all groups and targets to a JSON file for backup or migration.
+          Importing a file will <strong>permanently replace</strong> all existing groups and targets.
+        </p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="btn-ghost" onClick={handleExport}>Export Config</button>
+          <button
+            className="btn-ghost"
+            style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
+            disabled={importing}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {importing ? 'Importing…' : 'Import Config'}
+          </button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json,application/json"
+          style={{ display: 'none' }}
+          onChange={handleImportFile}
+        />
       </div>
 
       {/* Users */}
