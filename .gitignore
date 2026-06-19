@@ -1,0 +1,56 @@
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+
+# ── Build outputs ─────────────────────────────────────────────────────────────
+apps/public/dist/
+apps/admin/dist/
+
+# ── Environment & secrets ─────────────────────────────────────────────────────
+# .env.example is committed — it's a safe template with no real values
+.env
+.env.local
+.env.*.local
+
+# ── Database & runtime data ───────────────────────────────────────────────────
+data/
+# Catch any stray SQLite files outside data/ (e.g. created by vite dev proxy)
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── OS artifacts ──────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+desktop.ini
+
+# ── Editor artifacts ──────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*~
+
+# ── Claude Code workspace settings ───────────────────────────────────────────
+.claude/
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+.npm/
+.cache/
+coverage/
+.nyc_output/
