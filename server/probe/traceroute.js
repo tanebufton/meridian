@@ -11,12 +11,24 @@ const PRIVATE_RANGES = [
   /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
 ];
 
+const PRIVATE_IPV6_RANGES = [
+  /^::1$/,           // loopback
+  /^fe80:/i,         // link-local
+  /^fc00:/i,         // unique local
+  /^fd/i,            // unique local
+];
+
 function isPrivate(ip) {
   if (!ip) return false;
+  if (ip.includes(':')) return PRIVATE_IPV6_RANGES.some((r) => r.test(ip));
   return PRIVATE_RANGES.some((r) => r.test(ip));
 }
 
-function parseLine(line) {
+// Matches a bare IPv6 address (not bracketed) in traceroute6 output
+const IPV6_RE = /([0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7})/i;
+const IPV4_RE = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/;
+
+function parseLine(line, useIPv6 = false) {
   const m = line.match(/^\s*(\d+)\s+(.*)/);
   if (!m) return null;
 
@@ -27,7 +39,7 @@ function parseLine(line) {
     return { hop, ip: null, rtts: [null, null, null], timeout: true, hidden: false, rdns: null };
   }
 
-  const ipMatch = rest.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+  const ipMatch = useIPv6 ? rest.match(IPV6_RE) : rest.match(IPV4_RE);
   const ip = ipMatch ? ipMatch[1] : null;
 
   const segments = [...rest.matchAll(/(\d+(?:\.\d+)?)\s*ms|\*/g)];
@@ -54,10 +66,11 @@ async function reverseLookup(ip) {
   }
 }
 
-async function spawnTrace(host) {
+async function spawnTrace(host, useIPv6 = false) {
   return new Promise((resolve) => {
     const args = ['-n', '-m', '20', '-w', '2', '-q', '3', host];
-    const proc = spawn('traceroute', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const cmd = useIPv6 ? 'traceroute6' : 'traceroute';
+    const proc = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
     let stdout = '';
     let stderr = '';
@@ -72,7 +85,7 @@ async function spawnTrace(host) {
 
     proc.on('close', () => {
       clearTimeout(timer);
-      const hops = stdout.split('\n').map(parseLine).filter(Boolean);
+      const hops = stdout.split('\n').map((l) => parseLine(l, useIPv6)).filter(Boolean);
       const error = hops.length === 0 && stderr.trim() ? stderr.trim() : null;
       resolve({ hops, error });
     });
@@ -84,8 +97,8 @@ async function spawnTrace(host) {
   });
 }
 
-async function runTraceroute(host) {
-  const { hops, error } = await spawnTrace(host);
+async function runTraceroute(host, useIPv6 = false) {
+  const { hops, error } = await spawnTrace(host, useIPv6);
 
   if (hops.length === 0) return { hops, error };
 
@@ -100,4 +113,8 @@ async function runTraceroute(host) {
   };
 }
 
-module.exports = { runTraceroute, isPrivate };
+function runTraceroute6(host) {
+  return runTraceroute(host, true);
+}
+
+module.exports = { runTraceroute, runTraceroute6, isPrivate };

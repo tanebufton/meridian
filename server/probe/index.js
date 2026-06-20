@@ -3,7 +3,7 @@
 require('dotenv').config();
 const pino = require('pino');
 const { getDb, closeDb } = require('../db/db');
-const { pingHost } = require('./icmp');
+const { pingHost, ping6Host } = require('./icmp');
 const { resolveHost } = require('./dns');
 const { recalcUptime } = require('./uptime');
 const { rollup5Min, rollup1Hour, runRetention, backfillAggregates } = require('./rollup');
@@ -77,8 +77,10 @@ async function runProbe(target) {
       ? getStatus(prevRow.packet_loss ?? null, prevRow.dns_success ?? null, target.probe_type, !!prevRow.error)
       : null;
 
-    if (target.probe_type === 'icmp') {
-      result = await pingHost(target.host, target.packet_count);
+    if (target.probe_type === 'icmp' || target.probe_type === 'icmp6') {
+      result = target.probe_type === 'icmp6'
+        ? await ping6Host(target.host, target.packet_count)
+        : await pingHost(target.host, target.packet_count);
       db.prepare(
         `INSERT INTO probe_results
            (target_id, latency_min, latency_avg, latency_max, latency_mdev, packet_loss, rtts_json, resolved_ip, error)

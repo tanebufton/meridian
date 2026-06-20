@@ -65,11 +65,12 @@ export default function TargetModal({ target, groups, onSave, onClose }) {
             <label>Probe Type</label>
             <select value={form.probe_type} onChange={(e) => set('probe_type', e.target.value)}>
               <option value="icmp">ICMP (ping)</option>
+              <option value="icmp6">ICMPv6 (ping6)</option>
               <option value="dns">DNS resolution</option>
             </select>
           </div>
           <div className="field"><label>Interval (seconds)</label><input type="number" min={5} max={3600} value={form.interval_seconds} onChange={(e) => set('interval_seconds', e.target.value)} /></div>
-          {form.probe_type === 'icmp' && (
+          {(form.probe_type === 'icmp' || form.probe_type === 'icmp6') && (
             <div className="field"><label>Packet Count</label><input type="number" min={1} max={100} value={form.packet_count} onChange={(e) => set('packet_count', e.target.value)} /></div>
           )}
           <div className="field">

@@ -44,6 +44,39 @@ function run() {
     try { db.prepare(stmt).run(); } catch { /* column already exists */ }
   }
 
+  // Widen the probe_type CHECK constraint to include 'icmp6'.
+  // SQLite does not support ALTER TABLE ... DROP CONSTRAINT, so we recreate the table.
+  const constraintRow = db.prepare(
+    `SELECT sql FROM sqlite_master WHERE type='table' AND name='targets'`
+  ).get();
+  if (constraintRow && !constraintRow.sql.includes("'icmp6'")) {
+    db.pragma('foreign_keys = OFF');
+    db.transaction(() => {
+      db.prepare('ALTER TABLE targets RENAME TO _targets_old').run();
+      db.prepare(`
+        CREATE TABLE targets (
+          id               INTEGER PRIMARY KEY AUTOINCREMENT,
+          group_id         INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+          name             TEXT NOT NULL,
+          host             TEXT NOT NULL,
+          probe_type       TEXT NOT NULL CHECK(probe_type IN ('icmp', 'icmp6', 'dns')),
+          interval_seconds INTEGER NOT NULL DEFAULT 60,
+          packet_count     INTEGER NOT NULL DEFAULT 10,
+          enabled          INTEGER NOT NULL DEFAULT 1,
+          notes            TEXT,
+          created_at       INTEGER NOT NULL DEFAULT (unixepoch())
+        )
+      `).run();
+      db.prepare(
+        `INSERT INTO targets (id, group_id, name, host, probe_type, interval_seconds, packet_count, enabled, notes, created_at)
+         SELECT id, group_id, name, host, probe_type, interval_seconds, packet_count, enabled, notes, COALESCE(created_at, unixepoch()) FROM _targets_old`
+      ).run();
+      db.prepare('DROP TABLE _targets_old').run();
+    })();
+    db.pragma('foreign_keys = ON');
+    console.log('Migrated targets table: added icmp6 to probe_type CHECK constraint.');
+  }
+
   // Update query planner statistics so new indexes are used immediately
   db.prepare('ANALYZE').run();
 

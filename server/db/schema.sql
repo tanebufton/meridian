@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS targets (
   group_id         INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   name             TEXT NOT NULL,
   host             TEXT NOT NULL,
-  probe_type       TEXT NOT NULL CHECK(probe_type IN ('icmp', 'dns')),
+  probe_type       TEXT NOT NULL CHECK(probe_type IN ('icmp', 'icmp6', 'dns')),
   interval_seconds INTEGER NOT NULL DEFAULT 60,
   packet_count     INTEGER NOT NULL DEFAULT 10,
   enabled          INTEGER NOT NULL DEFAULT 1,

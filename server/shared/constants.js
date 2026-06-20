@@ -14,6 +14,7 @@ const STATUS_THRESHOLDS = {
 
 function getStatus(packetLoss, dnsSuccess, probeType, hasError) {
   if (hasError) return STATUS.DOWN;
+  if (probeType === 'icmp6') probeType = 'icmp';
   if (probeType === 'dns') {
     if (dnsSuccess === 1) return STATUS.UP;
     if (dnsSuccess === 0) return STATUS.DOWN;

@@ -104,7 +104,7 @@ module.exports = async function targetRoutes(app) {
     if (isNaN(id)) return reply.status(400).send({ error: 'Invalid id' });
 
     const db = getDb();
-    const target = db.prepare('SELECT id, host FROM targets WHERE id = ?').get(id);
+    const target = db.prepare('SELECT id, host, probe_type FROM targets WHERE id = ?').get(id);
     if (!target) return reply.status(404).send({ error: 'Not found' });
 
     const { traceAndCache } = require('../../probe/traceroute-backfill');

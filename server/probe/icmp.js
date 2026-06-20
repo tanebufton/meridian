@@ -11,11 +11,12 @@ const { spawn } = require('child_process');
  * -W 5  : 5s per-packet reply timeout. Default 1s records 100% loss on high-latency hosts.
  * -w    : hard deadline so a stalled probe never blocks the scheduler slot.
  */
-function pingHost(host, packetCount) {
+function pingHost(host, packetCount, useIPv6 = false) {
   return new Promise((resolve) => {
     const deadline = packetCount + 15;
     const args = ['-c', String(packetCount), '-i', '1', '-W', '5', '-w', String(deadline), host];
-    const proc = spawn('ping', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const cmd = useIPv6 ? 'ping6' : 'ping';
+    const proc = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
     let stdout = '';
     let stderr = '';
@@ -40,8 +41,10 @@ function pingHost(host, packetCount) {
       const lossMatch = stdout.match(/([\d.]+)%\s+packet\s+loss/);
       const packet_loss = lossMatch ? parseFloat(lossMatch[1]) : 100;
 
-      // Resolved IP: first line is "PING hostname (1.2.3.4) ..."
-      const resolvedMatch = stdout.match(/^PING\s+\S+\s+\((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)/m);
+      // Resolved IP: "PING hostname (1.2.3.4) ..." or "PING6(...) host --> addr"
+      const resolvedMatch = useIPv6
+        ? stdout.match(/^PING6\([^)]+\)\s+\S+\s+-->\s+(\S+)/m)
+        : stdout.match(/^PING\s+\S+\s+\((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)/m);
       const resolved_ip = resolvedMatch ? resolvedMatch[1] : null;
 
       if (rttMatch) {
@@ -84,4 +87,8 @@ function pingHost(host, packetCount) {
   });
 }
 
-module.exports = { pingHost };
+function ping6Host(host, packetCount) {
+  return pingHost(host, packetCount, true);
+}
+
+module.exports = { pingHost, ping6Host };

@@ -1,7 +1,7 @@
 'use strict';
 
 const { getDb } = require('../db/db');
-const { runTraceroute } = require('./traceroute');
+const { runTraceroute, runTraceroute6 } = require('./traceroute');
 
 const CONCURRENCY = 4;
 
@@ -47,7 +47,8 @@ function isDramaticChange(prevHops, newHops) {
 async function traceAndCache(target, log) {
   const db = getDb();
   if (log) log(`Traceroute: ${target.host}`);
-  const result = await runTraceroute(target.host);
+  const useIPv6 = target.probe_type === 'icmp6';
+  const result = useIPv6 ? await runTraceroute6(target.host) : await runTraceroute(target.host);
   const now = Math.floor(Date.now() / 1000);
 
   db.prepare(
@@ -90,7 +91,7 @@ async function runTracerouteBackfill({ log, shouldStop = () => false, cutoffSeco
   let targets;
   try {
     targets = db.prepare(
-      `SELECT t.id, t.host FROM targets t
+      `SELECT t.id, t.host, t.probe_type FROM targets t
        LEFT JOIN traceroute_cache tc ON tc.target_id = t.id
        WHERE t.enabled = 1 AND (
          tc.ran_at IS NULL

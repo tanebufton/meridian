@@ -12,7 +12,7 @@ const TargetSchema = z.object({
   group_id: z.number().int().positive(),
   name: z.string().min(1).max(100),
   host: z.string().min(1).max(255),
-  probe_type: z.enum(['icmp', 'dns']),
+  probe_type: z.enum(['icmp', 'icmp6', 'dns']),
   interval_seconds: z.number().int().min(5).max(3600).default(60),
   packet_count: z.number().int().min(1).max(100).default(10),
   enabled: z.union([z.boolean(), z.number().int().min(0).max(1)]).default(1),
