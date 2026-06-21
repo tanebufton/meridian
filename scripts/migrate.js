@@ -51,6 +51,11 @@ function run() {
   ).get();
   if (constraintRow && !constraintRow.sql.includes("'icmp6'")) {
     db.pragma('foreign_keys = OFF');
+    // legacy_alter_table prevents SQLite 3.26+ from rewriting FK references in
+    // dependent tables (probe_results, etc.) to point at the temporary rename
+    // target. Without it, those tables end up referencing "_targets_old" which
+    // is then dropped, breaking every INSERT into those tables.
+    db.pragma('legacy_alter_table = ON');
     db.transaction(() => {
       db.prepare('ALTER TABLE targets RENAME TO _targets_old').run();
       db.prepare(`
@@ -73,6 +78,7 @@ function run() {
       ).run();
       db.prepare('DROP TABLE _targets_old').run();
     })();
+    db.pragma('legacy_alter_table = OFF');
     db.pragma('foreign_keys = ON');
     console.log('Migrated targets table: added icmp6 to probe_type CHECK constraint.');
   }
