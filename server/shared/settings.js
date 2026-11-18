@@ -33,6 +33,7 @@ function defaults() {
     renotify_minutes: 0,          // re-alert on still-open, unacknowledged incidents (0 = off)
     // Traceroute: 'auto' tries ICMP, then TCP, then UDP (UDP alone reaches few destinations)
     traceroute_method: 'auto',
+    notify_route_changes: false,  // tell chat channels when a confirmed route change is recorded
     route_confirm_runs: 2,        // a changed AS path must be seen this many runs in a row to be recorded
     // Public banner
     banner_enabled: false,

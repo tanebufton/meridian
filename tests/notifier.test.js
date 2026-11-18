@@ -146,3 +146,32 @@ test('flood: chat channels are batched into one digest, paging channels still ge
   assert.equal(calls.filter((c) => c.url === '/pd').length, 0, 'paging channels never receive digests');
   n.flood.threshold = 5;
 });
+
+test('route-change messages: formatted per channel, never sent to paging channels', async () => {
+  const rc = { event: 'route_change', target: 'Baidu', host: 'www.baidu.com', group: 'CDNs', status: 'ROUTE_CHANGE', prevPath: [55850, 4637], newPath: [55850, 3356],
+    pathText: 'was: AS55850 → AS4637\nnow: AS55850 → AS3356', targetUrl: 'https://s.example/target/14', timestamp: '2026-01-01T00:00:00Z' };
+  await n.sendToChannel({ type: 'slack', url: `${base}/slack` }, rc);
+  assert.match(json(calls[0]).text, /Route to Baidu changed[\s\S]*was: AS55850 → AS4637[\s\S]*now: AS55850 → AS3356/);
+  calls.length = 0;
+  await n.sendToChannel({ type: 'pushover', url: 'pushover://uQiRzpo4DXghDmr9QzzfQu27cmVRsG@azGDORePK8gMaC0QOYAMyEEuzJnyUi' }, rc);
+  const p = new URLSearchParams(calls[0].body);
+  assert.equal(p.get('priority'), '-1', 'silent push');
+  assert.equal(p.get('title'), 'Route changed: Baidu');
+  calls.length = 0;
+  await n.sendToChannel({ type: 'webhook', url: `${base}/hook` }, rc);
+  assert.deepEqual(json(calls[0]).as_path, [55850, 3356]); assert.deepEqual(json(calls[0]).previous_as_path, [55850, 4637]); assert.equal(json(calls[0]).event, 'route_change');
+  calls.length = 0;
+  assert.deepEqual(await n.sendToChannel({ type: 'pagerduty', url: 'pagerduty://R0UTINGKEY0123456789abcdef012345' }, rc), { skipped: true });
+  assert.deepEqual(await n.sendToChannel({ type: 'opsgenie', url: 'opsgenie://abcd1234-abcd-1234-abcd-123456789012' }, rc), { skipped: true });
+  assert.equal(calls.length, 0, 'a route change must never page anyone');
+});
+
+test('fireRouteChange: skips paging channels, honours group filters, ignores the recovery switch', async () => {
+  addChannel('slack', `${base}/chat`);
+  addChannel('pagerduty', 'pagerduty://R0UTINGKEY0123456789abcdef012345');
+  addChannel('webhook', `${base}/only-g2`, { groups: [2] });
+  addChannel('webhook', `${base}/no-recovery`, { recovery: false });
+  await n.fireRouteChange({ targetId: 1, groupId: 1, name: 'T', host: 'h', groupName: 'G', prevPath: [1, 2], newPath: [1, 3], names: new Map([[3, 'Lumen']]) });
+  assert.deepEqual(calls.map((c) => c.url).sort(), ['/chat', '/no-recovery']);
+  assert.match(json(calls.find((c) => c.url === '/chat')).text, /AS3 Lumen/);
+});

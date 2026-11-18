@@ -198,7 +198,7 @@
       ]
     },
     {
-      "name": "DNS Infrastructure",
+      "name": "DNS",
       "description": "Root and .nz authoritative servers. Anycast: low latency means a local instance is answering.",
       "sort_order": 0,
       "public": true,
@@ -411,7 +411,7 @@
       ]
     },
     {
-      "name": "Asia - Northeast",
+      "name": "Asia - North-East",
       "description": "North-East Asia",
       "sort_order": 0,
       "public": true,
@@ -451,6 +451,15 @@
           "packet_count": 10,
           "enabled": true,
           "notes": "Taiwan Fixed Network (AS9924)"
+        },
+        {
+          "name": "[HK] HKUST",
+          "host": "www.ust.hk",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS3363"
         }
       ]
     },
@@ -499,7 +508,7 @@
       ]
     },
     {
-      "name": "Africa",
+      "name": "Africa & South America",
       "description": "Africa — few reliable in-country hosts exist; these are real datacentre endpoints",
       "sort_order": 0,
       "public": true,
@@ -521,15 +530,7 @@
           "packet_count": 10,
           "enabled": true,
           "notes": "AS33764"
-        }
-      ]
-    },
-    {
-      "name": "South America",
-      "description": "South America",
-      "sort_order": 0,
-      "public": true,
-      "targets": [
+        },
         {
           "name": "[BR] Vultr - São Paulo",
           "host": "sao-br-ping.vultr.com",
@@ -560,7 +561,7 @@
       ]
     },
     {
-      "name": "North America - NE",
+      "name": "North America - East & Central",
       "description": "",
       "sort_order": 0,
       "public": true,
@@ -573,11 +574,20 @@
           "packet_count": 10,
           "enabled": true,
           "notes": "In-datacentre ping host"
+        },
+        {
+          "name": "[MX] Vultr - Mexico City",
+          "host": "mex-mx-ping.vultr.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "In-datacentre ping host"
         }
       ]
     },
     {
-      "name": "North America - SW",
+      "name": "North America - West",
       "description": "",
       "sort_order": 0,
       "public": true,
@@ -594,24 +604,7 @@
       ]
     },
     {
-      "name": "North America - S",
-      "description": "",
-      "sort_order": 0,
-      "public": true,
-      "targets": [
-        {
-          "name": "[MX] Vultr - Mexico City",
-          "host": "mex-mx-ping.vultr.com",
-          "probe_type": "icmp",
-          "interval_seconds": 300,
-          "packet_count": 10,
-          "enabled": true,
-          "notes": "In-datacentre ping host"
-        }
-      ]
-    },
-    {
-      "name": "Oceania",
+      "name": "Australia",
       "description": "",
       "sort_order": 0,
       "public": true,
@@ -655,24 +648,7 @@
       ]
     },
     {
-      "name": "Asia - HK / TH",
-      "description": "",
-      "sort_order": 0,
-      "public": true,
-      "targets": [
-        {
-          "name": "[HK] HKUST",
-          "host": "www.ust.hk",
-          "probe_type": "icmp",
-          "interval_seconds": 300,
-          "packet_count": 10,
-          "enabled": true,
-          "notes": "AS3363"
-        }
-      ]
-    },
-    {
-      "name": "Asia - West/Central",
+      "name": "Middle East & Central Asia",
       "description": "",
       "sort_order": 0,
       "public": true,

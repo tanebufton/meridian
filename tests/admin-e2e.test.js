@@ -283,7 +283,7 @@ test('the bundled NZ RSP example file is a valid import and creates the expected
   assert.equal(res.status, 200, JSON.stringify(res.body));
   assert.ok(res.body.imported.targets >= 40);
   const groups = (await alice.get('/api/admin/groups')).body.map((g) => g.name);
-  for (const n of ['NZ - Domestic', 'Pacific Islands', 'DNS Infrastructure', 'Africa', 'South America']) assert.ok(groups.includes(n), n);
+  for (const n of ['NZ - Domestic', 'Pacific Islands', 'DNS', 'Africa & South America', 'Australia']) assert.ok(groups.includes(n), n);
   const again = await alice.post('/api/admin/config/import', file);
   assert.equal(again.body.imported.targets, 0, 'importing twice adds nothing');
 });

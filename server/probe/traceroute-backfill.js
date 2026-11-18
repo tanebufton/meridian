@@ -10,6 +10,8 @@ const { loadSettings } = require('../shared/settings');
 const CONCURRENCY = 4;
 const PENDING_RECHECK_SECONDS = 15 * 60; // a suspected change is re-verified soon, not tomorrow
 
+const notifier = require('./notifier');
+
 const defaultDeps = {
   runTraceroute: traceroute.runTraceroute,
   annotateHops: asnLookup.annotateHops,
@@ -89,6 +91,15 @@ async function traceAndCache(target, log, deps = defaultDeps) {
         if (confirms >= Math.max(1, settings.route_confirm_runs | 0)) {
           // Record the change at the time it was FIRST seen, with that run's hops
           insertHistory(pend && confirms > 1 ? pend.hops : hops, path, complete, pend && confirms > 1 ? pend.ran_at : now);
+          if (settings.notify_route_changes) {
+            const info = db.prepare('SELECT t.name, t.host, t.group_id, g.name AS group_name FROM targets t JOIN groups g ON g.id = t.group_id WHERE t.id = ?').get(target.id);
+            const names = new Map();
+            for (const h of [...hops, ...prev.hops]) if (h.asn != null && h.as_name && !names.has(h.asn)) names.set(h.asn, h.as_name.replace(/^.* - /, '').replace(/,\s*[A-Z]{2}$/, ''));
+            if (info) (deps.fireRouteChange || notifier.fireRouteChange)({
+              targetId: target.id, groupId: info.group_id, name: info.name, host: info.host, groupName: info.group_name,
+              prevPath: prev.path, newPath: path, names,
+            }).catch(() => {});
+          }
         } else {
           pendingJson = JSON.stringify({ path, hops, ran_at: now });
           pendingCount = confirms;

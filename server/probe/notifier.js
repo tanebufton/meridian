@@ -15,9 +15,14 @@ function fmtDuration(seconds) {
   return `${Math.floor(h / 24)}d ${h % 24}h`;
 }
 
-function formatMessage({ event, target, host, group, status, targetUrl, durationSeconds, cause, digest }) {
+function formatMessage({ event, target, host, group, status, targetUrl, durationSeconds, cause, digest, pathText }) {
   if (event === 'digest') return digest;
   const loc = group ? ` (${group})` : '';
+  if (event === 'route_change') {
+    let m = `🛣️ Route to ${target} changed — ${host}${loc}\n${pathText || ''}`;
+    if (targetUrl) m += `\n${targetUrl}`;
+    return m;
+  }
   let msg;
   if (event === 'recovered' || (!event && status === 'UP')) {
     const took = durationSeconds ? ` after ${fmtDuration(durationSeconds)}` : '';
@@ -102,7 +107,15 @@ const postJson = (url, body, headers) => send(url, { body, headers });
 
 const isRecovery = (p) => p.event === 'recovered' || (!p.event && p.status === 'UP');
 
+const titleOf = (p, recovered) => (
+  p.event === 'route_change' ? `Route changed: ${p.target}`
+    : recovered ? `${p.target} recovered`
+    : p.event === 'digest' ? 'Meridian alert digest'
+    : p.event === 'reminder' ? `${p.target} still DOWN` : `${p.target} is DOWN`);
+
 async function sendToChannel(channel, payload) {
+  // Paging systems are for outages only: a route change is information, not something to wake someone for
+  if (payload.event === 'route_change' && PAGING.has(channel.type)) return { skipped: true };
   const msg = formatMessage(payload);
   const recovered = isRecovery(payload);
 
@@ -129,8 +142,8 @@ async function sendToChannel(channel, payload) {
 
     case 'gotify':
       return postJson(channel.url, {
-        title: recovered ? `${payload.target} recovered` : payload.event === 'digest' ? 'Meridian alert digest' : `${payload.target} is down`,
-        message: msg, priority: recovered ? 3 : 8,
+        title: titleOf(payload, recovered),
+        message: msg, priority: payload.event === 'route_change' ? 3 : recovered ? 3 : 8,
       });
 
     case 'ntfy': {
@@ -140,8 +153,12 @@ async function sendToChannel(channel, payload) {
       u.searchParams.delete('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       if (payload.event === 'digest') return postJson(u.toString(), { topic: undefined, title: 'Meridian: alert digest', message: msg, priority: 4, tags: ['warning'] }, headers);
-      const title = recovered ? `${payload.target} recovered` : payload.event === 'reminder' ? `${payload.target} still DOWN` : `${payload.target} is ${payload.status}`;
-      const body = { title, message: msg.split('\n')[0].replace(/^\S+\s/, ''), priority: recovered ? 3 : 5, tags: [recovered ? 'white_check_mark' : 'red_circle'] };
+      const title = titleOf(payload, recovered);
+      const route = payload.event === 'route_change';
+      const body = {
+        title, message: route ? msg.split('\n').slice(1).join('\n') : msg.split('\n')[0].replace(/^\S+\s/, ''),
+        priority: route ? 3 : recovered ? 3 : 5, tags: [route ? 'twisted_rightwards_arrows' : recovered ? 'white_check_mark' : 'red_circle'],
+      };
       if (payload.targetUrl) body.click = payload.targetUrl;
       return postJson(u.toString(), body, headers);
     }
@@ -160,9 +177,10 @@ async function sendToChannel(channel, payload) {
       const extra = new URLSearchParams((m[3] || '').slice(1));
       const body = {
         token: m[2], user: m[1],
-        title: recovered ? `${payload.target} recovered` : payload.event === 'digest' ? 'Meridian alert digest' : `${payload.target} is DOWN`,
+        title: titleOf(payload, recovered),
         message: msg.slice(0, 1000),
-        priority: recovered || payload.event === 'digest' ? 0 : 1, // 1 = bypass quiet hours
+        // 1 = bypass quiet hours (outages); -1 = silent (route changes); 0 = normal
+        priority: payload.event === 'route_change' ? -1 : recovered || payload.event === 'digest' ? 0 : 1,
       };
       if (payload.targetUrl) { body.url = payload.targetUrl; body.url_title = 'Open in Meridian'; }
       for (const k of ['device', 'sound']) if (extra.get(k)) body[k] = extra.get(k);
@@ -218,6 +236,7 @@ async function sendToChannel(channel, payload) {
         previous_status: payload.previousStatus,
         duration_seconds: payload.durationSeconds ?? null,
         cause: payload.cause ?? null,
+        ...(payload.event === 'route_change' ? { as_path: payload.newPath ?? null, previous_as_path: payload.prevPath ?? null } : {}),
         message: msg,
         target_url: payload.targetUrl || null,
         timestamp: payload.timestamp,
@@ -326,7 +345,25 @@ async function fireStatusChange({ kind, targetId, groupId, name, host, groupName
   await Promise.allSettled(jobs);
 }
 
+/**
+ * Tell chat-style channels that a route was confirmed to have changed. Opt-in (Settings → Alerting),
+ * never pages, and not subject to the outage flood limiter because confirmation already rate-limits it.
+ */
+async function fireRouteChange({ targetId, groupId, name, host, groupName, prevPath, newPath, names }) {
+  const channels = enabledChannels();
+  if (channels.length === 0) return;
+  const label = (a) => `AS${a}${names?.get(a) ? ` ${names.get(a)}` : ''}`;
+  const pathText = `was: ${prevPath.length ? prevPath.map(label).join(' → ') : '(unknown)'}\nnow: ${newPath.map(label).join(' → ')}`;
+  const baseUrl = loadSettings().public_base_url;
+  const payload = {
+    event: 'route_change', groupId, target: name, host, group: groupName || null, status: 'ROUTE_CHANGE',
+    prevPath, newPath, pathText, targetUrl: (baseUrl && targetId) ? `${baseUrl.replace(/\/$/, '')}/target/${targetId}` : null,
+    timestamp: new Date().toISOString(),
+  };
+  await Promise.allSettled(channels.filter((c) => !PAGING.has(c.type) && wants(c, payload)).map((c) => deliver(c, payload)));
+}
+
 // Test hooks
 function _reset() { recentSends = []; suppressUntil = 0; suppressed = []; if (digestTimer) clearTimeout(digestTimer); digestTimer = null; }
 
-module.exports = { fireStatusChange, sendToChannel, formatMessage, fmtDuration, recordDelivery, endpoints, retry, flood, flushDigest, PAGING, _reset };
+module.exports = { fireStatusChange, fireRouteChange, sendToChannel, formatMessage, fmtDuration, recordDelivery, endpoints, retry, flood, flushDigest, PAGING, _reset };

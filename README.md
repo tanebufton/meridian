@@ -6,20 +6,26 @@ Modern network latency monitoring — a spiritual successor to SmokePing.
 
 ## Screenshots
 
-**Public dashboard — overview**
+**Public dashboard — overview** (groups, ongoing incident, scheduled-maintenance banner)
 ![Overview](docs/screenshots/public-overview.png)
 
-**Public dashboard — group view**
+**Group view**
 ![Group view](docs/screenshots/public-group.png)
 
-**Public dashboard — target detail**
+**Target detail** — latency with outage, maintenance and route-change markers, 95th percentile and loss bars
 ![Target detail](docs/screenshots/public-target.png)
+
+**Traceroute** — the path as a chain of networks, with per-hop AS and load-balancing indicators
+![Traceroute](docs/screenshots/public-traceroute.png)
+
+**Incidents**
+![Public incidents](docs/screenshots/public-incidents.png)
+
+**TV / wall-board mode**
+![TV mode](docs/screenshots/tv-mode.png)
 
 **Admin — dashboard**
 ![Admin dashboard](docs/screenshots/admin-dashboard.png)
-
-**Public — incidents**
-![Public incidents](docs/screenshots/public-incidents.png)
 
 **Admin — targets**
 ![Admin targets](docs/screenshots/admin-targets.png)
@@ -29,6 +35,9 @@ Modern network latency monitoring — a spiritual successor to SmokePing.
 
 **Admin — maintenance windows**
 ![Admin maintenance](docs/screenshots/admin-maintenance.png)
+
+**Admin — adding a notification channel**
+![Admin channel](docs/screenshots/admin-channel.png)
 
 ---
 
@@ -233,6 +242,7 @@ Traces run at startup and daily per target. Each run is made with the first meth
 - **Route changes are changes of AS path.** Hop-by-hop IP comparison flagged almost every run (4,201 "changes" over 171 days for 141 targets); comparing the ordered AS path leaves a handful of real events — typically a transit-provider switch. A trace cut short by silent routers is compared leniently so it isn't mistaken for a change.
 - **Changes must be confirmed.** A changed path is recorded only if seen again on a confirming run (re-checked within ~15 minutes; Settings → Data → *Confirm after N runs*). The change is stamped with when it was first seen.
 - **On the chart.** Route changes appear as markers on the latency timeline, so you can see a path change and a latency shift together.
+- **Tell me.** Turn on *Tell chat channels when a route changes* (Settings → Alerting) to get "Route to X changed: was AS… → now AS…" once a change is confirmed. It is silent on Pushover, never sent to PagerDuty/Opsgenie, respects each channel's group filter, and is off by default because some targets legitimately switch carrier every few days.
 - Reverse DNS is resolved in parallel; up to 50 historical path snapshots are kept per target; private/RFC-1918 hops are hidden from the public view.
 
 To clean up history recorded by the older address-based rule, run `node scripts/compact-traceroute-history.js --dry-run`, then without `--dry-run` (it snapshots the database first).
@@ -330,7 +340,7 @@ Open `/tv` (or **TV mode** in the sidebar) on a display. It has no navigation, a
 
 ## Example target sets
 
-`examples/nz-rsp-targets.json` is a starter set for an NZ retail service provider (NZ-hosted infrastructure, Pacific, `.nz` and root DNS, plus regions often missing from hosting-provider lists). Import it with Settings → Data → Import → *Add what's missing*. See `examples/README.md` for why CDN-fronted sites make poor regional targets.
+`examples/nz-rsp-targets.json` is a starter set for an NZ retail service provider (63 verified targets: NZ-hosted infrastructure, the Pacific, `.nz` and root DNS, and regions often missing from hosting-provider lists such as South Asia, South-East Asia and Africa), organised into 19 region groups. Redundant hosting-provider duplicates are deliberately left out: ten targets on the same company in the same region add noise, not information. Import it with Settings → Data → Import → *Add what's missing*. See `examples/README.md` for why CDN-fronted sites make poor regional targets.
 
 ---
 

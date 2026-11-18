@@ -120,6 +120,7 @@ export default function Alerting() {
           recover_after_successes: Number(form.recover_after_successes),
           renotify_minutes: Number(form.renotify_minutes),
           public_base_url: form.public_base_url || null,
+          notify_route_changes: !!form.notify_route_changes,
         },
       });
       toast('Alert rules saved');
@@ -166,6 +167,13 @@ export default function Alerting() {
               <input type="number" min={0} max={10080} value={form.renotify_minutes} onChange={(e) => set('renotify_minutes', e.target.value)} />
               <div className="muted help">{Number(form.renotify_minutes) > 0 ? 'Repeats until someone acknowledges the incident.' : '0 = never repeat.'}</div>
             </div>
+          </div>
+          <div className="field row">
+            <Toggle checked={!!form.notify_route_changes} onChange={(v) => set('notify_route_changes', v)} />
+            <span style={{ fontSize: 13 }}>Tell chat channels when a route changes</span>
+          </div>
+          <div className="muted help" style={{ marginTop: -8, marginBottom: 14, maxWidth: 560 }}>
+            Sends "Route to X changed: was AS… → now AS…" once a change is confirmed. Silent pushes on Pushover; never sent to PagerDuty or Opsgenie. Some targets legitimately switch carrier every few days, so try it on a channel you don't mind being chatty.
           </div>
           <div className="field" style={{ maxWidth: 440 }}>
             <label>Public base URL <span style={{ fontWeight: 400 }}>— optional</span></label>

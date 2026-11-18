@@ -172,3 +172,33 @@ test('a host that drops probes still counts as complete when the path reaches it
   await traceAndCache(t3, null, { ...deps([{ ...run([9500, 15169], false), destIp: '203.0.113.99' }]), lookupDest: async () => { throw new Error('dns down'); } });
   assert.equal(db.prepare('SELECT complete FROM traceroute_cache WHERE target_id=?').get(t3.id).complete, 0, 'a failed lookup never turns into a false "complete"');
 });
+
+test('route-change notification fires once, only for a CONFIRMED change, and only when enabled', async () => {
+  const { saveSettings } = require('../server/shared/settings');
+  const fired = [];
+  const withNotify = (seq) => ({ ...deps(seq), fireRouteChange: async (e) => { fired.push(e); } });
+  const t = seedTarget(db);
+
+  saveSettings({ notify_route_changes: false });
+  await traceAndCache(t, null, withNotify([run([9500, 4637, 15169])]));
+  await traceAndCache(t, null, withNotify([run([9500, 3356, 15169])]));
+  await traceAndCache(t, null, withNotify([run([9500, 3356, 15169])]));
+  assert.equal(fired.length, 0, 'disabled: confirmed change is recorded but nobody is told');
+  assert.equal(history(t.id).length, 2);
+
+  saveSettings({ notify_route_changes: true });
+  const t2 = seedTarget(db);
+  await traceAndCache(t2, null, withNotify([run([9500, 4637, 15169])]));
+  assert.equal(fired.length, 0, 'the first (baseline) trace is not a change');
+  await traceAndCache(t2, null, withNotify([run([9500, 3356, 15169])]));
+  assert.equal(fired.length, 0, 'one sighting is only suspected');
+  await traceAndCache(t2, null, withNotify([run([9500, 4637, 15169])]));
+  assert.equal(fired.length, 0, 'a blip that reverts is never announced');
+  await traceAndCache(t2, null, withNotify([run([9500, 3356, 15169])]));
+  await traceAndCache(t2, null, withNotify([run([9500, 3356, 15169])]));
+  assert.equal(fired.length, 1);
+  assert.deepEqual(fired[0].prevPath, [9500, 4637, 15169]); assert.deepEqual(fired[0].newPath, [9500, 3356, 15169]);
+  await traceAndCache(t2, null, withNotify([run([9500, 3356, 15169])]));
+  assert.equal(fired.length, 1, 'and not again while the route stays the same');
+  saveSettings({});
+});
