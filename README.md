@@ -88,7 +88,8 @@ Modern network latency monitoring — a spiritual successor to SmokePing.
 - **Prometheus `/metrics`** endpoint, embeddable **status badges**, an **Atom feed** of incidents, and CSV export of any chart range
 - **Richer charts** — one chart with average, min–max band, 95th percentile, packet-loss bars, and outages, maintenance windows and route changes drawn on the timeline; linear / fit / log scale and drag-to-zoom
 - **Private groups and targets** — monitor internal infrastructure without it ever appearing on the public dashboard, API, feed or badges
-- **TV / wall-board mode** (`/tv`) — chrome-free, auto-rotating scenes with a stale-data warning
+- **Routing page** (`/routing`) — which carriers and peers your traffic actually leaves through, how concentrated that is, and which regions depend on which carrier, derived from your own traceroutes
+- **TV / wall-board mode** (`/tv`) — pick the scenes and groups, press Play: auto-rotating, chrome-free, with a stale-data warning
 - **90-day availability bars**, light/dark theme, and a mobile-friendly public dashboard
 - **Config import/export** — backup and restore all groups and targets as JSON (import merges by default and never deletes history unless you pick *Replace*)
 - **Data retention** — configurable rolling windows for raw, 5-min, and 1-hour data
@@ -320,7 +321,7 @@ Changing your password, or turning 2FA on, signs out all your other sessions.
 - **Prometheus**: set `METRICS_TOKEN` in `.env`, restart `meridian-admin`, then scrape `http://<admin-host>:3002/metrics` with `Authorization: Bearer <token>`. Exposes `meridian_target_up`, `_latency_seconds`, `_jitter_seconds`, `_packet_loss_ratio`, `_uptime_ratio{window}`, `_last_probe_timestamp_seconds`, `_in_maintenance`, `_incident_open`, plus fleet totals and database size. Without a token the route does not exist.
 - **Status badge**: `https://your-host/badge/<target-id>.svg` (add `?label=My%20Site`) — see *Share & export* on any target page for copy-paste Markdown/HTML.
 - **Incident feed**: `https://your-host/feed.atom`.
-- **Public API** (read-only, JSON): `/api/v1/summary`, `/groups`, `/incidents`, `/targets/:id`, `/targets/:id/results?range=`, `/targets/:id/availability?days=`.
+- **Public API** (read-only, JSON): `/api/v1/summary`, `/groups`, `/incidents`, `/routing`, `/targets/:id`, `/targets/:id/results?range=`, `/targets/:id/availability?days=`.
 
 ---
 
@@ -332,7 +333,7 @@ In **Groups** and in the target form, switch off *Show on the public dashboard*.
 
 ## TV / wall-board mode
 
-Open `/tv` (or **TV mode** in the sidebar) on a display. It has no navigation, auto-refreshes every 30 s, keeps the screen awake where the browser allows, and rotates through scenes: **overview** (status, counts, 24 h latency), **groups** (every group sized to fit the screen), **problems** and **incidents** (skipped automatically when empty), and **performance** (targets slower than their own 7-day norm, and packet loss). If the data stops updating it shows a red *"Data may be out of date"* banner, so a dead probe worker can't hide behind a calm-looking screen.
+Open `/tv` (or **TV mode** in the sidebar). It starts on a **picker**: tick the scenes and groups you want (or a single featured target), reorder them, set seconds per scene, text size and theme, and press **Play**. The playing page's address holds the playlist, so it can be bookmarked, and `E` returns to the picker. The playing board has no navigation, auto-refreshes every 30 s, keeps the screen awake where the browser allows, and rotates through scenes: **overview** (status, counts, 24 h latency), **groups** (every group sized to fit the screen), **problems** and **incidents** (skipped automatically when empty), and **performance** (targets slower than their own 7-day norm, and packet loss). If the data stops updating it shows a red *"Data may be out of date"* banner, so a dead probe worker can't hide behind a calm-looking screen.
 
 `/tv?views=overview,groups,group:3,target:12&interval=30&theme=dark&zoom=1.25` — scenes: `overview groups problems latency incidents allgroups group:ID target:ID`. Keys: `←` `→` change scene · `Space` pause · `F` fullscreen · `?` help. The page reloads every 6 hours to pick up new versions.
 
@@ -341,6 +342,27 @@ Open `/tv` (or **TV mode** in the sidebar) on a display. It has no navigation, a
 ## Example target sets
 
 `examples/nz-rsp-targets.json` is a starter set for an NZ retail service provider (63 verified targets: NZ-hosted infrastructure, the Pacific, `.nz` and root DNS, and regions often missing from hosting-provider lists such as South Asia, South-East Asia and Africa), organised into 19 region groups. Redundant hosting-provider duplicates are deliberately left out: ten targets on the same company in the same region add noise, not information. Import it with Settings → Data → Import → *Add what's missing*. See `examples/README.md` for why CDN-fronted sites make poor regional targets.
+
+---
+
+## Using Meridian on a different network
+
+Nothing about a particular provider is built in. The Routing page, route-change tracking and AS names are all derived from your own traceroutes, so a deployment at another ISP, carrier, data centre or cloud region adapts automatically. What to know:
+
+- **Your own AS is detected**, as the network almost every path starts with, and the first network after it is shown as your carrier or peer. If your own routers don't answer traceroute (or you're behind a provider's NAT) the first AS seen is your *provider*, which would be mistaken for you. In that case set **Settings → Data → Your network's AS number**; paths that then don't contain it are still attributed correctly (to the first network seen), and without the setting they are left out and counted rather than guessed.
+- **ICMP traceroute needs raw sockets.** Run the probe worker as root, or grant the capability: `sudo setcap cap_net_raw+ep $(which traceroute)`. Without it Meridian falls back to UDP, which reaches far fewer destinations.
+- **AS names need outbound DNS** to `*.asn.cymru.com` (Team Cymru). If that is blocked, route comparison falls back to the /24 networks crossed and the Routing page stays empty.
+- **IPv6 targets** are traced and annotated on a best-effort basis; the discovery tool is IPv4-only.
+- **The example target set describes one vantage point** (Auckland, behind Mercury NZ). Its notes about which carrier a path uses ("Via Arelion → …") will differ from yours. Don't copy it blindly: build a list for *your* network with the discovery tool below.
+
+### Finding targets for your network
+
+```bash
+node scripts/discover-targets.js            # traces ~180 candidate hosts from this machine (a few minutes)
+node scripts/discover-targets.js --candidates mine.txt --out new.json --min-score 2 --own-asn 64500
+```
+
+It resolves and pings a candidate list (`examples/target-candidates.txt`: cloud and hosting regions, IXPs, carriers, national mirrors), traces each one with ICMP, annotates the path with ASNs, and keeps only the candidates that add a route you don't already monitor: a **carrier or peer none of your current targets use** (+2), a **destination network you don't monitor** (+1), with a complete trace as a tie-break. It drops **CDN-fronted** hosts (a foreign site answering in 2 ms from a CDN network measures the CDN node near you, not that country) and collapses duplicates on the same carrier and network. The result is an import file for Settings → Data → Import. Re-run it after changing carriers or joining an exchange.
 
 ---
 

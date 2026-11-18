@@ -11,3 +11,6 @@ Tips for building your own set:
 - Prefer datacentre ping hosts (Vultr `*-ping.vultr.com`, OVH `*.smokeping.ovh.net`, looking glasses),
   national research networks, registries and in-country carriers.
 - Keep CDN-fronted "popular services" in their own group so they're read as customer experience.
+
+The notes in `nz-rsp-targets.json` describe paths as seen from the original deployment (Auckland, AS55850). Your paths will differ: use `node scripts/discover-targets.js` to build a list for your own network (see the main README).
+`target-candidates.txt` is the candidate pool that script reads: one `category|name|hostname` per line.

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSummary, useGroups, useIncidents, useGroupResults, useTargetResults, useTargetEvents } from '../hooks/useApi';
 import LatencyChart from '../components/LatencyChart';
@@ -228,12 +228,13 @@ function buildScenes(spec, groups) {
   return out;
 }
 
-export default function TV() {
+function TVPlayer() {
   const [params] = useSearchParams();
   const interval = Math.min(Math.max(parseInt(params.get('interval'), 10) || 20, 5), 600);
   const spec = params.get('views') || DEFAULT_VIEWS;
   const zoom = Math.min(Math.max(parseFloat(params.get('zoom')) || 1, 0.5), 2.5);
 
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const summary = useSummary();
   const groupsQ = useGroups();
@@ -293,6 +294,7 @@ export default function TV() {
       else if (e.key === ' ') { e.preventDefault(); setPaused((p) => !p); }
       else if (e.key === 'f') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
       else if (e.key === '?') setHelp((h) => !h);
+      else if (e.key === 'e') navigate('/tv?setup=1');
       else if (e.key === 'Escape') setHelp(false);
     };
     let idle;
@@ -341,7 +343,7 @@ export default function TV() {
         <div className="tv-help" onClick={() => setHelp(false)}>
           <div className="tv-help-box">
             <h2>Wall-board mode</h2>
-            <p><kbd>←</kbd> <kbd>→</kbd> change scene &nbsp; <kbd>Space</kbd> pause &nbsp; <kbd>F</kbd> fullscreen &nbsp; <kbd>?</kbd> this help</p>
+            <p><kbd>←</kbd> <kbd>→</kbd> change scene &nbsp; <kbd>Space</kbd> pause &nbsp; <kbd>F</kbd> fullscreen &nbsp; <kbd>E</kbd> edit playlist &nbsp; <kbd>?</kbd> this help</p>
             <p>Customise with the address:</p>
             <code>/tv?views=overview,groups,group:3,target:12&amp;interval=30&amp;theme=dark&amp;zoom=1.25</code>
             <p className="muted">Scenes: overview · groups · problems · latency · incidents · allgroups · group:ID · target:ID. Problems and incidents are skipped when there is nothing to show.</p>
@@ -350,4 +352,164 @@ export default function TV() {
       )}
     </div>
   );
+}
+
+
+// ── Setup: pick what to show, then press Play ────────────────────────────────
+
+const SCENES = [
+  { token: 'overview', label: 'Overview', hint: 'Status, counts and 24 h latency' },
+  { token: 'groups', label: 'Groups', hint: 'Every group as a tile' },
+  { token: 'problems', label: 'Problems', hint: 'Down and degraded targets (skipped when none)' },
+  { token: 'latency', label: 'Performance', hint: 'Slower than usual, and packet loss' },
+  { token: 'incidents', label: 'Incidents', hint: 'Last 7 days (skipped when none)' },
+];
+const PRESETS = [
+  { label: 'Default', views: ['overview', 'groups', 'problems', 'latency', 'incidents'] },
+  { label: 'Problems only', views: ['problems', 'incidents'] },
+  { label: 'Overview + groups', views: ['overview', 'groups'] },
+];
+const SAVED = 'meridian_tv_playlist';
+
+function TVSetup() {
+  const navigate = useNavigate();
+  const groupsQ = useGroups();
+  const groups = useMemo(() => groupsQ.data?.filter((g) => g.targets.length > 0) || [], [groupsQ.data]);
+  const targets = useMemo(() => groups.flatMap((g) => g.targets.map((t) => ({ ...t, group: g.name }))), [groups]);
+
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(SAVED) || 'null'); } catch { /* storage blocked */ }
+
+  const [playlist, setPlaylist] = useState(saved?.views || PRESETS[0].views);
+  const [interval, setIntervalSec] = useState(saved?.interval || 20);
+  const [theme, setTheme] = useState(saved?.theme || 'dark');
+  const [zoom, setZoom] = useState(saved?.zoom || 1);
+  const [find, setFind] = useState('');
+
+  const has = (t) => playlist.includes(t);
+  const toggle = (t) => setPlaylist((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]));
+  const move = (i, d) => setPlaylist((p) => { const n = [...p]; const j = i + d; if (j < 0 || j >= n.length) return p; [n[i], n[j]] = [n[j], n[i]]; return n; });
+  const label = (t) => {
+    const [k, a] = t.split(':');
+    if (k === 'group') return groups.find((g) => g.id === +a)?.name || `Group ${a}`;
+    if (k === 'target') return targets.find((x) => x.id === +a)?.name || `Target ${a}`;
+    return SCENES.find((s) => s.token === k)?.label || t;
+  };
+  const kindOf = (t) => t.split(':')[0];
+  const matches = find.trim() ? targets.filter((t) => t.name.toLowerCase().includes(find.trim().toLowerCase()) || t.host.toLowerCase().includes(find.trim().toLowerCase())).slice(0, 8) : [];
+
+  const urlFor = (views) => `/tv?views=${views.join(',')}&interval=${interval}&theme=${theme}${zoom !== 1 ? `&zoom=${zoom}` : ''}`;
+  function play() {
+    if (!playlist.length) return;
+    try { localStorage.setItem(SAVED, JSON.stringify({ views: playlist, interval, theme, zoom })); } catch { /* storage blocked */ }
+    navigate(urlFor(playlist));
+  }
+
+  return (
+    <div className="tvs">
+      <div className="tvs-wrap">
+        <div className="tvs-head">
+          <div>
+            <div className="group-title">TV mode</div>
+            <div className="group-sub">Choose what to show on the wall display, then press Play. The address of the playing page can be bookmarked.</div>
+          </div>
+          <Link to="/" className="muted" style={{ fontSize: 12 }}>← Back to dashboard</Link>
+        </div>
+
+        <div className="tvs-grid">
+          <div>
+            <section className="panel">
+              <div className="panel-head"><h2 className="panel-title">Presets</h2></div>
+              <div className="chips-row">
+                {PRESETS.map((p) => <button key={p.label} className="chip-btn" onClick={() => setPlaylist(p.views)}>{p.label}</button>)}
+                {saved && <button className="chip-btn" onClick={() => { setPlaylist(saved.views); setIntervalSec(saved.interval); }}>Last used</button>}
+                <button className="chip-btn" onClick={() => setPlaylist(['overview', ...groups.map((g) => `group:${g.id}`)])}>Overview + every group</button>
+                <button className="chip-btn" onClick={() => setPlaylist([])}>Clear</button>
+              </div>
+            </section>
+
+            <section className="panel">
+              <h2 className="panel-title">Scenes</h2>
+              <div className="tvs-scenes">
+                {SCENES.map((s) => (
+                  <label key={s.token} className={`tvs-check${has(s.token) ? ' on' : ''}`}>
+                    <input type="checkbox" checked={has(s.token)} onChange={() => toggle(s.token)} />
+                    <span><b>{s.label}</b><small>{s.hint}</small></span>
+                  </label>
+                ))}
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="panel-head">
+                <h2 className="panel-title">Groups — one full-screen view each</h2>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  <button className="btn-link" onClick={() => setPlaylist((p) => [...p, ...groups.map((g) => `group:${g.id}`).filter((t) => !p.includes(t))])}>all</button>
+                  {' · '}
+                  <button className="btn-link" onClick={() => setPlaylist((p) => p.filter((t) => kindOf(t) !== 'group'))}>none</button>
+                </span>
+              </div>
+              <div className="chips-row">
+                {groups.map((g) => <button key={g.id} className={`chip-btn${has(`group:${g.id}`) ? ' on' : ''}`} onClick={() => toggle(`group:${g.id}`)}>{g.name} <small>{g.targets.length}</small></button>)}
+              </div>
+            </section>
+
+            <section className="panel">
+              <h2 className="panel-title">A single target</h2>
+              <input className="toolbar-search" style={{ width: '100%', maxWidth: 360 }} placeholder="Search a target to feature…" value={find} onChange={(e) => setFind(e.target.value)} />
+              <div className="chips-row" style={{ marginTop: 8 }}>
+                {matches.map((t) => <button key={t.id} className={`chip-btn${has(`target:${t.id}`) ? ' on' : ''}`} onClick={() => toggle(`target:${t.id}`)}>{t.name} <small>{t.group}</small></button>)}
+                {find.trim() && matches.length === 0 && <span className="muted" style={{ fontSize: 12 }}>No matches</span>}
+              </div>
+            </section>
+          </div>
+
+          <aside>
+            <section className="panel tvs-sticky">
+              <h2 className="panel-title">Playlist · {playlist.length} scene{playlist.length !== 1 ? 's' : ''}</h2>
+              {playlist.length === 0 ? <div className="muted" style={{ fontSize: 13 }}>Nothing selected yet.</div> : (
+                <ol className="tvs-list">
+                  {playlist.map((t, i) => (
+                    <li key={t}>
+                      <span className="tvs-kind">{kindOf(t) === 'group' ? 'group' : kindOf(t) === 'target' ? 'target' : 'scene'}</span>
+                      <span className="tvs-label">{label(t)}</span>
+                      <span className="tvs-btns">
+                        <button aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
+                        <button aria-label="Move down" disabled={i === playlist.length - 1} onClick={() => move(i, 1)}>↓</button>
+                        <button aria-label="Remove" onClick={() => toggle(t)}>✕</button>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              <div className="tvs-opts">
+                <label>Seconds per scene <b>{interval}s</b>
+                  <input type="range" min={5} max={120} step={5} value={interval} onChange={(e) => setIntervalSec(+e.target.value)} />
+                </label>
+                <label>Text size <b>{zoom}×</b>
+                  <input type="range" min={0.75} max={2} step={0.25} value={zoom} onChange={(e) => setZoom(+e.target.value)} />
+                </label>
+                <div className="seg" role="group" aria-label="Theme">
+                  <button className={theme === 'dark' ? 'on' : ''} onClick={() => setTheme('dark')}>Dark</button>
+                  <button className={theme === 'light' ? 'on' : ''} onClick={() => setTheme('light')}>Light</button>
+                </div>
+              </div>
+
+              <button className="tvs-play" disabled={!playlist.length} onClick={play}>▶ Play</button>
+              <div className="muted" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>Problems and incidents scenes are skipped automatically when there is nothing to show. While playing: ← → change scene · Space pause · F fullscreen · E back to this screen.</div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function TV() {
+  const [params] = useSearchParams();
+  // /tv opens the picker; a playlist in the address (views=…) or ?play=1 starts playing straight away
+  const playing = params.get('views') || params.get('play');
+  if (!playing || params.get('setup')) return <TVSetup />;
+  return <TVPlayer />;
 }

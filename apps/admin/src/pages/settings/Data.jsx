@@ -55,12 +55,14 @@ function TraceSettings({ toast }) {
   const mut = useMutate(['admin-settings']);
   const [method, setMethod] = useState(null);
   const [confirmRuns, setConfirmRuns] = useState(null);
+  const [ownAsn, setOwnAsn] = useState(null);
   if (!settings.data) return null;
   const m = method ?? settings.data.traceroute_method ?? 'auto';
   const c = confirmRuns ?? settings.data.route_confirm_runs ?? 2;
+  const asn = ownAsn ?? (settings.data.own_asn ?? '');
   async function save(e) {
     e.preventDefault();
-    try { await mut.mutateAsync({ url: '/api/admin/settings', method: 'PUT', body: { traceroute_method: m, route_confirm_runs: Number(c) } }); toast('Traceroute settings saved'); }
+    try { await mut.mutateAsync({ url: '/api/admin/settings', method: 'PUT', body: { traceroute_method: m, route_confirm_runs: Number(c), own_asn: String(asn).trim() === '' ? null : Number(String(asn).replace(/^AS/i, '')) } }); toast('Traceroute settings saved'); }
     catch (err) { toast(err.message, 'error'); }
   }
   return (
@@ -81,6 +83,11 @@ function TraceSettings({ toast }) {
           <input type="number" min={1} max={5} value={c} onChange={(e) => setConfirmRuns(e.target.value)} />
           <div className="muted help">A changed AS path is only recorded if it's seen on this many consecutive runs (re-checked every ~15 min), so one-off blips are ignored.</div>
         </div>
+      </div>
+      <div className="field" style={{ maxWidth: 320 }}>
+        <label>Your network's AS number <span style={{ fontWeight: 400 }}>— optional</span></label>
+        <input value={asn} onChange={(e) => setOwnAsn(e.target.value)} placeholder="e.g. 55850 (leave empty to detect)" inputMode="numeric" />
+        <div className="muted help">The Routing page works out which carrier each path leaves through. It detects your AS from the traceroutes; set it here if your own routers don't answer traceroute (or you're behind a provider's NAT), otherwise your provider would be mistaken for you.</div>
       </div>
       <button type="submit" disabled={mut.isPending}>Save</button>
     </form>

@@ -1,0 +1,180 @@
+Vultr|Vultr Singapore|sgp-ping.vultr.com
+Vultr|Vultr Singapore2|sgp-ts-ping.vultr.com
+Vultr|Vultr Seattle|wa-us-ping.vultr.com
+Vultr|Vultr Seattle2|sea-us-ping.vultr.com
+Vultr|Vultr Chicago|il-us-ping.vultr.com
+Vultr|Vultr Dallas|tx-us-ping.vultr.com
+Vultr|Vultr Atlanta|ga-us-ping.vultr.com
+Vultr|Vultr Miami|fl-us-ping.vultr.com
+Vultr|Vultr San Jose|sjc-ca-us-ping.vultr.com
+Vultr|Vultr Silicon Valley|sv-ca-us-ping.vultr.com
+Vultr|Vultr Frankfurt|fra-de-ping.vultr.com
+Vultr|Vultr Amsterdam|ams-nl-ping.vultr.com
+Vultr|Vultr Madrid|mad-es-ping.vultr.com
+Vultr|Vultr Warsaw|war-pl-ping.vultr.com
+Vultr|Vultr Seoul|sel-kr-ping.vultr.com
+Vultr|Vultr Seoul2|icn-kr-ping.vultr.com
+Vultr|Vultr Honolulu|hnl-hi-us-ping.vultr.com
+Vultr|Vultr Los Angeles2|lax-ca-us-ping.vultr.com
+Vultr|Vultr Newark|nj-us-ping.vultr.com
+Vultr|Vultr London|lon-gb-ping.vultr.com
+Vultr|Vultr Manchester|man-uk-ping.vultr.com
+Vultr|Vultr Delhi|del-in-ping.vultr.com
+Vultr|Vultr Mumbai|bom-in-ping.vultr.com
+Hetzner|Hetzner Falkenstein|fsn1-speed.hetzner.com
+Hetzner|Hetzner Nuremberg|nbg1-speed.hetzner.com
+Hetzner|Hetzner Helsinki|hel1-speed.hetzner.com
+Hetzner|Hetzner Ashburn|ash-speed.hetzner.com
+Hetzner|Hetzner Hillsboro|hil-speed.hetzner.com
+Hetzner|Hetzner Singapore|sin-speed.hetzner.com
+Hetzner|Hetzner Germany|speed.hetzner.de
+LeaseWeb|LeaseWeb sgp1|mirror.sgp1.sg.leaseweb.net
+LeaseWeb|LeaseWeb fra10|mirror.fra10.de.leaseweb.net
+LeaseWeb|LeaseWeb lax12|mirror.lax12.us.leaseweb.net
+LeaseWeb|LeaseWeb wdc1|mirror.wdc1.us.leaseweb.net
+LeaseWeb|LeaseWeb dal13|mirror.dal13.us.leaseweb.net
+LeaseWeb|LeaseWeb mia11|mirror.mia11.us.leaseweb.net
+LeaseWeb|LeaseWeb sea11|mirror.sea11.us.leaseweb.net
+LeaseWeb|LeaseWeb hkg10|mirror.hkg10.hk.leaseweb.net
+LeaseWeb|LeaseWeb ams1|mirror.ams1.nl.leaseweb.net
+LeaseWeb|LeaseWeb lon1|mirror.lon1.uk.leaseweb.net
+LeaseWeb|LeaseWeb tyo11|mirror.tyo11.jp.leaseweb.net
+LeaseWeb|LeaseWeb sfo12|mirror.sfo12.us.leaseweb.net
+LeaseWeb|LeaseWeb mtl2|mirror.mtl2.ca.leaseweb.net
+LeaseWeb|LeaseWeb syd10|mirror.syd10.au.leaseweb.net
+LeaseWeb|LeaseWeb ams2|mirror.ams2.nl.leaseweb.net
+OVH|OVH sgp1-sgp|sgp1-sgp.smokeping.ovh.net
+OVH|OVH syd1-syd|syd1-syd.smokeping.ovh.net
+OVH|OVH bhs1-bhs|bhs1-bhs.smokeping.ovh.net
+OVH|OVH sbg1-sbg|sbg1-sbg.smokeping.ovh.net
+OVH|OVH rbx1-rbx|rbx1-rbx.smokeping.ovh.net
+OVH|OVH gra1-gra|gra1-gra.smokeping.ovh.net
+OVH|OVH par1-pa|par1-pa.smokeping.ovh.net
+OVH|OVH mrs1-mrs|mrs1-mrs.smokeping.ovh.net
+OVH|OVH waw1-oza|waw1-oza.smokeping.ovh.net
+OVH|OVH pdx1-hil|pdx1-hil.smokeping.ovh.net
+OVH|OVH was1-vin|was1-vin.smokeping.ovh.net
+OVH|OVH lon1-eri|lon1-eri.smokeping.ovh.net
+OVH|OVH fra1-lim|fra1-lim.smokeping.ovh.net
+OVH|OVH ams1-ams|ams1-ams.smokeping.ovh.net
+AWS|AWS Singapore|dynamodb.ap-southeast-1.amazonaws.com
+AWS|AWS Sydney|dynamodb.ap-southeast-2.amazonaws.com
+AWS|AWS Tokyo|dynamodb.ap-northeast-1.amazonaws.com
+AWS|AWS Mumbai|dynamodb.ap-south-1.amazonaws.com
+AWS|AWS Hong Kong|dynamodb.ap-east-1.amazonaws.com
+AWS|AWS N. California|dynamodb.us-west-1.amazonaws.com
+AWS|AWS Oregon|dynamodb.us-west-2.amazonaws.com
+AWS|AWS N. Virginia|dynamodb.us-east-1.amazonaws.com
+AWS|AWS Ohio|dynamodb.us-east-2.amazonaws.com
+AWS|AWS Ireland|dynamodb.eu-west-1.amazonaws.com
+AWS|AWS Frankfurt|dynamodb.eu-central-1.amazonaws.com
+AWS|AWS London|dynamodb.eu-west-2.amazonaws.com
+AWS|AWS Sao Paulo|dynamodb.sa-east-1.amazonaws.com
+AWS|AWS Cape Town|dynamodb.af-south-1.amazonaws.com
+AWS|AWS Bahrain|dynamodb.me-south-1.amazonaws.com
+AWS|AWS Canada|dynamodb.ca-central-1.amazonaws.com
+AWS|AWS Seoul|dynamodb.ap-northeast-2.amazonaws.com
+AWS|AWS Jakarta|dynamodb.ap-southeast-3.amazonaws.com
+Carrier|NTT|www.gin.ntt.net
+Carrier|NTT2|www.ntt.com
+Carrier|HE|lg.he.net
+Carrier|HE2|he.net
+Carrier|Cogent|www.cogentco.com
+Carrier|GTT|www.gtt.net
+Carrier|Zayo|www.zayo.com
+Carrier|PCCW|www.pccwglobal.com
+Carrier|Tata|as6453.net
+Carrier|Sparkle|www.tisparkle.com
+Carrier|Orange|www.orange-business.com
+Carrier|Telia/Arelion|www.arelion.com
+Carrier|Lumen|lg.lumen.com
+Carrier|DTAG|ipv4.tele.net
+Carrier|Telstra Intl|www.telstraglobal.com
+Carrier|Singtel|www.singtel.com
+Carrier|StarHub|www.starhub.com
+Carrier|Vocus|www.vocus.net
+Carrier|Console Connect|www.consoleconnect.com
+Carrier|Megaport|www.megaport.com
+Carrier|Equinix|www.equinix.com.sg
+Carrier|Coresite|www.coresite.com
+Carrier|RETN|retn.net
+Carrier|Cogent LG|www.cogentco.com
+Carrier|Hibernia|www.hiberniaglobal.com
+Carrier|KPN|www.kpn.com
+Carrier|Swisscom|www.swisscom.ch
+IXP|SGIX|www.sgix.sg
+IXP|SIX Seattle|www.seattleix.net
+IXP|NWAX|www.nwax.net
+IXP|Any2|www.any2ix.coresite.com
+IXP|DE-CIX|www.de-cix.net
+IXP|AMS-IX|www.ams-ix.net
+IXP|LINX|www.linx.net
+IXP|Equinix IX|ix.equinix.com
+IXP|VIC-IX|www.ix.asn.au
+IXP|MegaIX|www.megaport.com
+IXP|EdgeIX|www.edgeix.com.au
+IXP|AKL-IX|ix.nz
+Mirror|NUS|www.nus.edu.sg
+Mirror|NTU SG|www.ntu.edu.sg
+Mirror|A*STAR|www.a-star.edu.sg
+Mirror|SingAREN|www.singaren.net.sg
+Mirror|SG gov|www.gov.sg
+Mirror|M1|www.m1.com.sg
+Mirror|Univ Washington|www.washington.edu
+Mirror|Oregon State|www.oregonstate.edu
+Mirror|UO Oregon|www.uoregon.edu
+Mirror|Stanford|www.stanford.edu
+Mirror|UCLA|www.ucla.edu
+Mirror|Caltech|www.caltech.edu
+Mirror|Cal Poly mirror|mirror.csclub.uwaterloo.ca
+Mirror|Kernel.org|mirrors.kernel.org
+Mirror|OSUOSL|ftp.osuosl.org
+Mirror|Oregon State mirror|mirror.oregonstate.edu
+Mirror|Univ Utah|www.utah.edu
+Mirror|DKRZ|ftp.fau.de
+Mirror|Debian DE|ftp.de.debian.org
+Mirror|Debian UK|ftp.uk.debian.org
+Mirror|Debian NL|ftp.nl.debian.org
+Mirror|Debian SG|ftp.sg.debian.org
+Mirror|Debian US|ftp.us.debian.org
+Mirror|Debian JP|ftp.jp.debian.org
+Mirror|Debian AU|ftp.au.debian.org
+Mirror|Debian HK|ftp.hk.debian.org
+Mirror|Debian TW|ftp.tw.debian.org
+Mirror|Debian IN|ftp.in.debian.org
+Mirror|Debian ZA|ftp.za.debian.org
+Mirror|Debian BR|ftp.br.debian.org
+Mirror|Debian CL|ftp.cl.debian.org
+Mirror|Debian KR|ftp.kr.debian.org
+Mirror|Debian FR|ftp.fr.debian.org
+Mirror|Debian SE|ftp.se.debian.org
+Mirror|Debian CA|ftp.ca.debian.org
+Mirror|Debian ES|ftp.es.debian.org
+Mirror|Debian IT|ftp.it.debian.org
+Mirror|Debian PL|ftp.pl.debian.org
+Mirror|Debian CZ|ftp.cz.debian.org
+Mirror|Debian RU|ftp.ru.debian.org
+Mirror|Debian TR|ftp.tr.debian.org
+Mirror|Debian ID|ftp.id.debian.org
+Mirror|Debian TH|ftp.th.debian.org
+Mirror|Debian MX|ftp.mx.debian.org
+Mirror|Debian IL|ftp.il.debian.org
+Mirror|Debian NO|ftp.no.debian.org
+Mirror|Debian FI|ftp.fi.debian.org
+Mirror|Debian IE|ftp.ie.debian.org
+Mirror|Debian AT|ftp.at.debian.org
+Mirror|Debian CH|ftp.ch.debian.org
+Mirror|Debian BG|ftp.bg.debian.org
+Mirror|Debian GR|ftp.gr.debian.org
+Mirror|Debian PT|ftp.pt.debian.org
+Mirror|Debian UA|ftp.ua.debian.org
+Mirror|Debian AR|ftp.ar.debian.org
+Mirror|Debian CO|ftp.co.debian.org
+Mirror|Debian PE|ftp.pe.debian.org
+Mirror|Debian KE|ftp.ke.debian.org
+Mirror|Debian PH|ftp.ph.debian.org
+Mirror|Debian MY|ftp.my.debian.org
+Mirror|Debian VN|ftp.vn.debian.org
+Mirror|Debian BD|ftp.bd.debian.org
+Mirror|Debian LK|ftp.lk.debian.org
+Mirror|Debian NP|ftp.np.debian.org

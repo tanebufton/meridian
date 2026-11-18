@@ -34,6 +34,7 @@ function defaults() {
     // Traceroute: 'auto' tries ICMP, then TCP, then UDP (UDP alone reaches few destinations)
     traceroute_method: 'auto',
     notify_route_changes: false,  // tell chat channels when a confirmed route change is recorded
+    own_asn: null,                // your network's AS number (optional; otherwise detected from traceroutes)
     route_confirm_runs: 2,        // a changed AS path must be seen this many runs in a row to be recorded
     // Public banner
     banner_enabled: false,

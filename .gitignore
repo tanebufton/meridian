@@ -54,3 +54,6 @@ desktop.ini
 .cache/
 coverage/
 .nyc_output/
+
+# Output of scripts/discover-targets.js
+discovered-targets.json

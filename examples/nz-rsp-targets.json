@@ -77,7 +77,7 @@
           "interval_seconds": 300,
           "packet_count": 10,
           "enabled": true,
-          "notes": "Served from inside an NZ carrier network (AS55850)"
+          "notes": "Served from inside an NZ carrier network"
         }
       ]
     },
@@ -407,6 +407,24 @@
           "packet_count": 10,
           "enabled": true,
           "notes": "Indonesian internet exchange (AS4622)"
+        },
+        {
+          "name": "[SG] Hetzner - Singapore",
+          "host": "sin-speed.hetzner.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Direct peering at the Singapore PoP"
+        },
+        {
+          "name": "[SG] SingAREN - Singapore",
+          "host": "www.singaren.net.sg",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Singapore research network, direct peering"
         }
       ]
     },
@@ -460,6 +478,33 @@
           "packet_count": 10,
           "enabled": true,
           "notes": "AS3363"
+        },
+        {
+          "name": "[JP] LeaseWeb - Tokyo",
+          "host": "mirror.tyo11.jp.leaseweb.net",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Lumen -> NTT (AS2914)"
+        },
+        {
+          "name": "[KR] KAIST/SPARCS - Korea",
+          "host": "ftp.kr.debian.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Korea Telecom (AS4766)"
+        },
+        {
+          "name": "[HK] LeaseWeb - Hong Kong",
+          "host": "mirror.hkg10.hk.leaseweb.net",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Direct peering; unusually high latency — a path worth watching"
         }
       ]
     },
@@ -557,6 +602,33 @@
           "packet_count": 10,
           "enabled": true,
           "notes": "AS22548"
+        },
+        {
+          "name": "[KE] Liquid Telecom - Kenya",
+          "host": "ftp.ke.debian.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Lumen -> Liquid Telecom (AS30844)"
+        },
+        {
+          "name": "[CL] INSACOM - Chile",
+          "host": "ftp.cl.debian.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Arelion -> Cogent"
+        },
+        {
+          "name": "[BR] UFPR - Brazil",
+          "host": "ftp.br.debian.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Arelion -> NTT (AS2914)"
         }
       ]
     },
@@ -583,6 +655,69 @@
           "packet_count": 10,
           "enabled": true,
           "notes": "In-datacentre ping host"
+        },
+        {
+          "name": "[US/TX] LeaseWeb - Dallas",
+          "host": "mirror.dal13.us.leaseweb.net",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Arelion -> Cogent"
+        },
+        {
+          "name": "[CA/QC] LeaseWeb - Montreal",
+          "host": "mirror.mtl2.ca.leaseweb.net",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Arelion -> Tata (AS6453)"
+        },
+        {
+          "name": "[US/VA] Hetzner - Ashburn",
+          "host": "ash-speed.hetzner.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Arelion"
+        },
+        {
+          "name": "[US/CA] Kernel.org mirrors",
+          "host": "mirrors.kernel.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Arelion -> GTT (AS3257)"
+        },
+        {
+          "name": "[CA] Rogers - Canada",
+          "host": "ftp.ca.debian.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Lumen -> Rogers (AS812)"
+        },
+        {
+          "name": "[US/UT] University of Utah",
+          "host": "www.utah.edu",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Arelion -> Cogent -> Internet2"
+        },
+        {
+          "name": "[US/WI] TDS Telecom (OSUOSL)",
+          "host": "ftp.osuosl.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via TDS Telecom (AS4181), a different US carrier"
         }
       ]
     },
@@ -600,6 +735,24 @@
           "packet_count": 10,
           "enabled": true,
           "notes": "In-datacentre ping host"
+        },
+        {
+          "name": "[US/OR] Hetzner - Hillsboro",
+          "host": "hil-speed.hetzner.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Direct peering (Pacific NW)"
+        },
+        {
+          "name": "[US/WA] Vultr - Seattle",
+          "host": "wa-us-ping.vultr.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Direct peering via SIX Seattle"
         }
       ]
     },
@@ -661,6 +814,280 @@
           "packet_count": 10,
           "enabled": true,
           "notes": "In-datacentre ping host"
+        }
+      ]
+    },
+    {
+      "name": "Europe - West",
+      "description": "",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[UK] Mythic Beasts (LINX)",
+          "host": "www.linx.net",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Direct peering (LINX)"
+        },
+        {
+          "name": "[DE] Hetzner - Falkenstein",
+          "host": "fsn1-speed.hetzner.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Direct peering (DE-CIX)"
+        },
+        {
+          "name": "[DE] LeaseWeb - Frankfurt",
+          "host": "mirror.fra10.de.leaseweb.net",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Direct peering (DE-CIX)"
+        },
+        {
+          "name": "[NL] LeaseWeb - Amsterdam",
+          "host": "mirror.ams1.nl.leaseweb.net",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Direct peering (AMS-IX)"
+        },
+        {
+          "name": "[DE] DFN (German research network)",
+          "host": "ftp.de.debian.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Direct peering with the German research network (AS680)"
+        },
+        {
+          "name": "[NL] SURF - Netherlands",
+          "host": "ftp.nl.debian.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Dutch research network"
+        },
+        {
+          "name": "[FR] Free - France",
+          "host": "ftp.fr.debian.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Arelion -> Free SAS (AS12322), a French consumer ISP"
+        }
+      ]
+    },
+    {
+      "name": "Europe - Central & South",
+      "description": "",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[CZ] CESNET - Czechia",
+          "host": "ftp.cz.debian.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Direct peering"
+        },
+        {
+          "name": "[IT] Seeweb - Italy",
+          "host": "ftp.it.debian.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Direct peering"
+        },
+        {
+          "name": "[AT] Anexia - Austria",
+          "host": "ftp.at.debian.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Anexia"
+        },
+        {
+          "name": "[PL] Warsaw Univ. of Technology",
+          "host": "ftp.pl.debian.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via a Polish carrier"
+        },
+        {
+          "name": "[BG] Sofia University - Bulgaria",
+          "host": "ftp.bg.debian.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Evolink / Bulgarian carriers"
+        }
+      ]
+    },
+    {
+      "name": "Europe - North & East",
+      "description": "",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[FI] Hetzner - Helsinki",
+          "host": "hel1-speed.hetzner.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Direct peering"
+        },
+        {
+          "name": "[NO] UNINETT - Norway",
+          "host": "ftp.no.debian.org",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Arelion -> NORDUnet -> UNINETT"
+        }
+      ]
+    },
+    {
+      "name": "Transit Carriers",
+      "description": "Hosts inside the carrier networks themselves: shows how your network reaches each transit provider",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "Hurricane Electric (AS6939)",
+          "host": "lg.he.net",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Hosted inside HE's own network"
+        },
+        {
+          "name": "Sparkle (AS6762)",
+          "host": "www.tisparkle.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Lumen -> Telecom Italia Sparkle"
+        },
+        {
+          "name": "Telstra Global (AS4637)",
+          "host": "www.telstraglobal.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Direct peering"
+        },
+        {
+          "name": "RETN (AS9002)",
+          "host": "retn.net",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Via Arelion -> RETN"
+        }
+      ]
+    },
+    {
+      "name": "Cloud Regions",
+      "description": "AWS regional service endpoints, reached by direct peering",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "AWS - Singapore",
+          "host": "dynamodb.ap-southeast-1.amazonaws.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Regional service endpoint; direct peering"
+        },
+        {
+          "name": "AWS - Tokyo",
+          "host": "dynamodb.ap-northeast-1.amazonaws.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Regional service endpoint"
+        },
+        {
+          "name": "AWS - Mumbai",
+          "host": "dynamodb.ap-south-1.amazonaws.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Regional service endpoint"
+        },
+        {
+          "name": "AWS - Oregon",
+          "host": "dynamodb.us-west-2.amazonaws.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Regional service endpoint"
+        },
+        {
+          "name": "AWS - N. Virginia",
+          "host": "dynamodb.us-east-1.amazonaws.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Regional service endpoint"
+        },
+        {
+          "name": "AWS - Frankfurt",
+          "host": "dynamodb.eu-central-1.amazonaws.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Regional service endpoint"
+        },
+        {
+          "name": "AWS - São Paulo",
+          "host": "dynamodb.sa-east-1.amazonaws.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Regional service endpoint"
+        },
+        {
+          "name": "AWS - Cape Town",
+          "host": "dynamodb.af-south-1.amazonaws.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Regional service endpoint"
         }
       ]
     }

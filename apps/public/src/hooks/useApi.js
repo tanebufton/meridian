@@ -103,3 +103,7 @@ export function useTargetEvents(id, range) {
     refetchInterval: 60_000,
   });
 }
+
+export function useRouting() {
+  return useQuery({ queryKey: ['routing'], queryFn: () => apiFetch('/api/v1/routing'), refetchInterval: 300_000 });
+}

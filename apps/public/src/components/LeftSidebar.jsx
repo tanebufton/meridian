@@ -92,7 +92,10 @@ export default function LeftSidebar() {
         </div>
 
         {!searchResults && (
-          <NavLink to="/incidents" className={({ isActive }) => `sidebar-nav-link ${isActive ? 'active' : ''}`}>Incidents</NavLink>
+          <>
+            <NavLink to="/incidents" className={({ isActive }) => `sidebar-nav-link ${isActive ? 'active' : ''}`}>Incidents</NavLink>
+            <NavLink to="/routing" className={({ isActive }) => `sidebar-nav-link ${isActive ? 'active' : ''}`}>Routing</NavLink>
+          </>
         )}
 
         {groups.isLoading && <div style={{ padding: '14px', fontSize: 11, color: 'var(--text-muted)' }}>Loading…</div>}

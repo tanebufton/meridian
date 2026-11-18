@@ -79,6 +79,7 @@ const SettingsSchema = z.object({
   traceroute_method: z.enum(['auto', 'icmp', 'tcp', 'udp']).optional(),
   route_confirm_runs: z.number().int().min(1).max(5).optional(),
   notify_route_changes: z.boolean().optional(),
+  own_asn: z.number().int().min(1).max(4294967295).nullable().optional(),
   banner_enabled: z.boolean().optional(),
   banner_text: z.string().max(500).optional().nullable(),
   banner_type: z.enum(['info', 'warning', 'maintenance']).optional(),

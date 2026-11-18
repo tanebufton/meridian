@@ -104,6 +104,7 @@ async function start() {
   await app.register(require('./routes/targets'), { prefix: '/api/v1' });
   await app.register(require('./routes/summary'), { prefix: '/api/v1' });
   await app.register(require('./routes/incidents'), { prefix: '' });
+  await app.register(require('./routes/routing'), { prefix: '' });
   await app.register(require('./routes/badge'), { prefix: '' });
 
   // SPA fallback

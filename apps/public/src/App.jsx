@@ -9,6 +9,7 @@ const GroupView = lazy(() => import('./pages/GroupView'));
 const TargetDetail = lazy(() => import('./pages/TargetDetail'));
 const Incidents = lazy(() => import('./pages/Incidents'));
 const TV = lazy(() => import('./pages/TV'));
+const Routing = lazy(() => import('./pages/Routing'));
 
 // Put the state of the world in the tab title, so a pinned tab works as a status light
 function useTabTitle() {
@@ -40,6 +41,7 @@ export default function App() {
               <Route path="/group/:id" element={<GroupView />} />
               <Route path="/target/:id" element={<TargetDetail />} />
               <Route path="/incidents" element={<Incidents />} />
+              <Route path="/routing" element={<Routing />} />
               <Route path="*" element={<div className="error-state">Page not found.</div>} />
             </Routes>
           </Suspense>

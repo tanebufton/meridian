@@ -219,6 +219,64 @@ test('TV mode: chrome-free, rotates scenes, keyboard control, target scene, and 
     for (const g of body) for (const tg of g.targets) tg.last_checked = Math.floor(Date.now() / 1000) - 600;
     await route.fulfill({ response: res, json: body });
   });
-  await stale.goto(P('/tv')); await stale.waitForSelector('.tv-stale');
+  await stale.goto(P('/tv?play=1')); await stale.waitForSelector('.tv-stale');
   assert.match(await stale.textContent('.tv-stale'), /out of date/);
+});
+
+
+test('TV picker: choose scenes and groups, reorder, press Play, and return with E', async (t) => {
+  if (!guard(t)) return;
+  const page = await newPage({ viewport: { width: 1400, height: 900 } });
+  await page.goto(P('/tv')); await page.waitForSelector('.tvs');
+  assert.equal(await page.locator('.tv-hero').count(), 0, 'opens the picker, not the playing board');
+  assert.equal(await page.locator('.tvs-list li').count(), 5, 'default playlist');
+
+  await page.click('button:text-is("Clear")');
+  assert.equal(await page.locator('.tvs-list li').count(), 0);
+  assert.ok(await page.locator('.tvs-play').isDisabled(), 'nothing to play yet');
+
+  await page.click('label:has-text("Overview") input');
+  await page.click('.chip-btn:has-text("Core Links")');            // a group scene
+  assert.equal(await page.locator('.tvs-list li').count(), 2);
+  assert.ok(!(await page.textContent('.tvs')).includes('Private Lab'), 'private groups are not offered');
+
+  await page.click('.tvs-list li:nth-child(2) button[aria-label="Move up"]');
+  assert.match(await page.textContent('.tvs-list li:nth-child(1)'), /Core Links/);
+
+  await page.fill('.toolbar-search', 'Bravo'); await page.click('.chip-btn:has-text("Bravo")');   // a single target
+  assert.equal(await page.locator('.tvs-list li').count(), 3);
+
+  await page.locator('.tvs-opts input[type=range]').first().fill('10');
+  await page.click('.tvs-play');
+  await page.waitForSelector('.tv-title');
+  const url = page.url();
+  assert.match(url, /views=group:\d+,overview,target:\d+/);
+  assert.match(url, /interval=10/);
+  assert.equal(await page.textContent('.tv-title'), 'Core Links', 'plays the chosen order');
+  await page.waitForSelector('.tv-card');
+
+  await page.keyboard.press('e'); await page.waitForSelector('.tvs');
+  assert.equal(await page.locator('.tvs-list li').count(), 3, 'the playlist is remembered when editing');
+  assert.deepEqual(page.errors, []);
+});
+
+test('routing page: carriers, direct peering and per-region split', async (t) => {
+  if (!guard(t)) return;
+  const page = await newPage();
+  await page.goto(P('/routing')); await page.waitForSelector('.list-table');
+  const body = await page.textContent('body');
+  assert.match(body, /AS4637/); assert.match(body, /Telstra Global|AS4637/);
+  assert.match(body, /Traced/); assert.match(body, /Next-hop networks/);
+  assert.ok(await page.locator('.region-row').count() >= 1, 'a row per region');
+  assert.ok(await page.locator('.share-bar').count() >= 1);
+  const heights = await page.$$eval('.route-table tbody tr', (rows) => rows.map((r) => Math.round(r.getBoundingClientRect().height)));
+  assert.ok(Math.max(...heights) - Math.min(...heights) <= 6, `carrier rows should be a uniform height, got ${heights}`);
+  const regionHeights = await page.$$eval('.region-row', (rows) => rows.map((r) => Math.round(r.getBoundingClientRect().height)));
+  assert.ok(Math.max(...regionHeights) - Math.min(...regionHeights) <= 10, `region rows should be a uniform height, got ${regionHeights}`);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1), false, 'no horizontal page scroll');
+  const clipped = await page.evaluate(() => { const w = document.querySelector('.route-table').parentElement; return w.scrollWidth - w.clientWidth; });
+  assert.ok(clipped <= 1, `the carrier table must fit its panel (columns were being pushed off the right edge: ${clipped}px overflow)`);
+  assert.ok(await page.locator('.route-table th:nth-child(4)').isVisible(), 'the Targets column must be visible, not pushed off-screen');
+  assert.ok(!body.includes('Private Lab'));
+  assert.deepEqual(page.errors, []);
 });
