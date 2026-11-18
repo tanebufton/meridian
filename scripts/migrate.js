@@ -21,6 +21,7 @@ function run() {
     // Snapshot before changing an existing database. VACUUM INTO is safe on a live WAL db.
     const backup = `${dbPath}.pre-migrate-v${before}-${Date.now()}`;
     db.exec(`VACUUM INTO '${backup.replace(/'/g, "''")}'`);
+    fs.chmodSync(backup, 0o600); // contains password hashes
     console.log(`Backup written: ${backup}`);
   }
 

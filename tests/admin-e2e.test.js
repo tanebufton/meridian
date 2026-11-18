@@ -16,7 +16,7 @@ const env = {
   ADMIN_PORT: String(PORT),
   ADMIN_HOST: '127.0.0.1',
   SESSION_SECRET: 'e2e-secret-e2e-secret-e2e-secret-1234',
-  METRICS_TOKEN: 'e2e-metrics',
+  METRICS_TOKEN: 'e2e-metrics-token-0123456789',
   NODE_ENV: 'production',
 };
 process.env.DATABASE_PATH = env.DATABASE_PATH;
@@ -76,7 +76,7 @@ const login = async (c, user, pass) => {
   await c.get('/api/admin/auth/me'); // picks up the CSRF cookie
   return c.call('POST', '/api/admin/auth/login', { username: user, password: pass });
 };
-const metrics = (c) => c.call('GET', '/metrics', undefined, { headers: { authorization: 'Bearer e2e-metrics' } });
+const metrics = (c) => c.call('GET', '/metrics', undefined, { headers: { authorization: 'Bearer e2e-metrics-token-0123456789' } });
 
 test('unauthenticated requests are rejected; CSRF is enforced', async () => {
   const c = client();

@@ -90,6 +90,7 @@ module.exports = async function configRoutes(app) {
       // Replacing cascades to every probe result, so keep a restorable copy first
       backup = `${dbPath}.pre-import-${Date.now()}`;
       db.exec(`VACUUM INTO '${backup.replace(/'/g, "''")}'`);
+      require('fs').chmodSync(backup, 0o600); // contains password hashes
     }
 
     const doImport = db.transaction(() => {

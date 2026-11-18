@@ -17,8 +17,11 @@ const { activeWindows } = require('../../shared/maintenance');
 const esc = (v) => String(v).replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/"/g, '\\"');
 const labels = (obj) => '{' + Object.entries(obj).map(([k, v]) => `${k}="${esc(v)}"`).join(',') + '}';
 
+// A short token is brute-forceable, so anything under 16 characters is treated as "not set"
+const configuredToken = () => (process.env.METRICS_TOKEN && process.env.METRICS_TOKEN.length >= 16 ? process.env.METRICS_TOKEN : null);
+
 function tokenOk(header) {
-  const want = process.env.METRICS_TOKEN;
+  const want = configuredToken();
   if (!want || !header) return false;
   const m = String(header).match(/^Bearer\s+(.+)$/i);
   if (!m) return false;
@@ -105,7 +108,7 @@ module.exports = async function metricsRoutes(app) {
   app.get('/metrics', async (req, reply) => {
     if (!tokenOk(req.headers.authorization) && !req.session) {
       // Disabled unless a token is configured; never reveal that the route exists otherwise
-      if (!process.env.METRICS_TOKEN) return reply.status(404).send({ error: 'Not found' });
+      if (!configuredToken()) return reply.status(404).send({ error: 'Not found' });
       return reply.status(401).header('WWW-Authenticate', 'Bearer').send({ error: 'Unauthorized' });
     }
     return reply.header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8').send(render());

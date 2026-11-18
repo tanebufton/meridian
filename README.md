@@ -192,7 +192,7 @@ Copy `.env.example` to `.env` and edit before first run.
 | `ADMIN_HOST` | `0.0.0.0` | Interface the admin server binds to (`127.0.0.1` = tunnel/local only) |
 | `TRUST_CF_HEADERS` | — | `true` when behind the Cloudflare Tunnel: trusts the loopback proxy for the real client IP (rate limits, audit log) |
 | `TRUSTED_PROXIES` | — | Comma-separated proxy IPs to trust instead (e.g. `cloudflared` on another host) |
-| `METRICS_TOKEN` | — | Enables `/metrics` on the admin port; scrape with `Authorization: Bearer <token>` |
+| `METRICS_TOKEN` | — | Enables `/metrics` on the admin port (16+ characters, otherwise ignored); scrape with `Authorization: Bearer <token>` |
 | `PROBE_CONCURRENCY` | `15` | Maximum probes running at once |
 | `RETENTION_RAW_DAYS` | `7` | Days to keep raw probe results |
 | `RETENTION_5MIN_DAYS` | `30` | Days to keep 5-min aggregates |
@@ -294,6 +294,9 @@ Changing your password, or turning 2FA on, signs out all your other sessions.
 ---
 
 ## Security Notes
+
+See also [SECURITY.md](SECURITY.md) for a deployment hardening checklist and how to report vulnerabilities.
+
 
 - Sessions: 32-byte random token, stored as SHA-256 hash, httpOnly cookie, 24h sliding expiry
 - CSRF: double-submit cookie (`X-CSRF-Token` header + `csrf_token` cookie)

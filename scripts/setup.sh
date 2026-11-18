@@ -45,7 +45,12 @@ echo -e "${GREEN}✓ Dependencies installed${NC}"
 # 3. Create .env if missing
 if [[ ! -f .env ]]; then
   cp .env.example .env
-  echo -e "${YELLOW}⚠ .env created from .env.example — please review and update SESSION_SECRET${NC}"
+  # Never leave the placeholder secret in place: generate a random one
+  SECRET=$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")
+  sed -i "s|^SESSION_SECRET=.*|SESSION_SECRET=${SECRET}|" .env
+  chmod 600 .env
+  echo -e "${GREEN}✓ .env created with a freshly generated SESSION_SECRET${NC}"
+  echo -e "${YELLOW}⚠ Review .env (ADMIN_HOST, TRUST_CF_HEADERS) before exposing anything${NC}"
 fi
 
 # 4. Run migrations

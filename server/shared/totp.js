@@ -86,8 +86,8 @@ function otpauthUri({ secret, account, issuer = 'Meridian' }) {
 // not enough to mint codes.
 function key() {
   const secret = process.env.SESSION_SECRET;
-  if (!secret || secret.startsWith('changeme')) {
-    throw new Error('SESSION_SECRET must be set to a random value in .env to use two-factor authentication');
+  if (!secret || secret.length < 16 || secret.startsWith('changeme')) {
+    throw new Error('SESSION_SECRET must be set to a random value of at least 16 characters in .env to use two-factor authentication');
   }
   return crypto.scryptSync(secret, 'meridian-totp-v1', 32);
 }

@@ -25,7 +25,7 @@
  * Targets without a `host` line are skipped.
  */
 
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
@@ -41,7 +41,10 @@ function readSource(source) {
     const remotePath = source.slice(colonIdx + 1);
     console.log(`Connecting to ${userHost} to read ${remotePath}...`);
     try {
-      return execSync(`ssh -o BatchMode=yes "${userHost}" "cat '${remotePath}'"`, {
+      // Argument array, no shell: a crafted source string can't inject commands.
+      // "--" stops a host beginning with "-" being read as an ssh option, and the remote
+      // path is passed to cat after its own "--".
+      return execFileSync('ssh', ['-o', 'BatchMode=yes', '--', userHost, `cat -- '${remotePath.replace(/'/g, `'\\''`)}'`], {
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'pipe'],
       });
