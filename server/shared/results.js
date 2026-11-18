@@ -9,7 +9,7 @@ function buildResultsQuery(db, targetId, range) {
   if (range === '1h' || range === '6h' || range === '12h') {
     const seconds = range === '1h' ? 3600 : range === '6h' ? 21600 : 43200;
     return db.prepare(
-      `SELECT id, timestamp, latency_min, latency_avg, latency_max, latency_mdev, packet_loss,
+      `SELECT id, timestamp, latency_min, latency_avg, latency_max, latency_mdev, latency_p50, latency_p95, packet_loss,
               dns_time, dns_success, resolved_ip, error
        FROM probe_results
        WHERE target_id = ? AND timestamp >= ?
@@ -20,7 +20,7 @@ function buildResultsQuery(db, targetId, range) {
   if (range === '24h' || range === '7d') {
     const seconds = range === '24h' ? 86400 : 604800;
     return db.prepare(
-      `SELECT period_start AS timestamp, latency_min, latency_avg, latency_max,
+      `SELECT period_start AS timestamp, latency_min, latency_avg, latency_max, latency_p50, latency_p95,
               packet_loss, sample_count, NULL AS dns_time, NULL AS dns_success,
               NULL AS resolved_ip, NULL AS error
        FROM probe_aggregates
@@ -32,7 +32,7 @@ function buildResultsQuery(db, targetId, range) {
   // 30d / 3mo — 1-hour aggregates
   const days = range === '3mo' ? 90 : 30;
   return db.prepare(
-    `SELECT period_start AS timestamp, latency_min, latency_avg, latency_max,
+    `SELECT period_start AS timestamp, latency_min, latency_avg, latency_max, latency_p50, latency_p95,
             packet_loss, sample_count, NULL AS dns_time, NULL AS dns_success,
             NULL AS resolved_ip, NULL AS error
      FROM probe_aggregates

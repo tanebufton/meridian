@@ -139,6 +139,7 @@ export default function LeftSidebar() {
         <div className="sidebar-foot">
           {lastUpdated && <div className="sidebar-updated">{lastUpdated}</div>}
           <ThemeToggle />
+          <Link to="/tv" className="tv-link" title="Full-screen wall display that rotates through views">TV mode ↗</Link>
         </div>
       </aside>
     </>

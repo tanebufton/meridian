@@ -67,16 +67,19 @@ Modern network latency monitoring — a spiritual successor to SmokePing.
 - **ICMP, ICMPv6, DNS, TCP-port and HTTP(S) probing** with configurable intervals and packet counts
 - **Latency charts** — raw, 5-min rollup, and 1-hour rollup with selectable time ranges
 - **Uptime tracking** — 24h / 7d / 30d per target
-- **Traceroute** — automatic daily runs per target with reverse DNS, path-change history stored when routes shift significantly
+- **Traceroute that understands routes** — ICMP-first probing (reaches far more destinations than UDP), per-hop network (ASN) names, load-balanced hops recognised, and a route-change history that records only genuine changes of the *networks crossed*, confirmed on a second run
 - **Status history ribbon** — last 20 probe outcomes per target
 - **Groups** — targets organised into groups, drag-and-drop reordering in admin
 - **Public dashboard** — read-only view with live search, group cards, per-target detail pages
 - **Admin panel** — full CRUD for groups and targets, bulk add/edit/enable/disable/delete, group-filtered and status-filtered views
 - **Incidents** — an outage is confirmed by N consecutive failed probes (no more alerts for a single dropped ping), tracked with start/end/duration, and can be **acknowledged**
 - **Maintenance windows** — one-off or repeating (daily/weekly) per target, group or everything; alerts are held, targets show as *Maintenance* publicly, and anything still down when the window ends alerts then
-- **Notifications** — multi-channel alerts on DOWN, recovery and (optionally) reminders; Slack, Discord, ntfy, Telegram, and generic webhooks; alert floods are batched into a digest
+- **Notifications** — PagerDuty, Opsgenie, Pushover, ntfy, Slack, Discord, Microsoft Teams, Gotify, Telegram and generic webhooks, with retries, per-channel group filters and live delivery status. Chat channels batch alert floods into one digest while paging channels still page for every outage
 - **Two-factor authentication** (TOTP) with recovery codes, self-service password change, and an admin **audit log**
 - **Prometheus `/metrics`** endpoint, embeddable **status badges**, an **Atom feed** of incidents, and CSV export of any chart range
+- **Richer charts** — one chart with average, min–max band, 95th percentile, packet-loss bars, and outages, maintenance windows and route changes drawn on the timeline; linear / fit / log scale and drag-to-zoom
+- **Private groups and targets** — monitor internal infrastructure without it ever appearing on the public dashboard, API, feed or badges
+- **TV / wall-board mode** (`/tv`) — chrome-free, auto-rotating scenes with a stale-data warning
 - **90-day availability bars**, light/dark theme, and a mobile-friendly public dashboard
 - **Config import/export** — backup and restore all groups and targets as JSON (import merges by default and never deletes history unless you pick *Replace*)
 - **Data retention** — configurable rolling windows for raw, 5-min, and 1-hour data
@@ -223,12 +226,16 @@ Copy `.env.example` to `.env` and edit before first run.
 
 ## Traceroute
 
-Traceroutes run automatically at startup and once daily per target (refresh window: 24 hours). A new history entry is stored whenever the path changes significantly (≥30% of hops differ from the previous run).
+Traces run at startup and daily per target. Each run is made with the first method that reaches the destination — **ICMP**, then **TCP :443**, then **UDP** (Settings → Data). UDP, the `traceroute` default, is filtered by many networks; in testing it reached 3 of 10 destinations while ICMP reached all 10. ICMP/TCP need raw sockets, so the probe worker must run as root (as it does under the default PM2 setup).
 
-- Uses `traceroute -n` to avoid per-hop DNS delays during the trace
-- Reverse DNS is resolved in parallel after the trace completes
-- Up to 50 historical path snapshots are retained per target
-- Private/RFC-1918 hops are hidden from the public view
+- **Networks, not just addresses.** Every hop is annotated with its origin AS (Team Cymru, over DNS — no API key; cached by /24). The path is shown as a chain of networks, and the hop table has a Network column.
+- **Load balancing is recognised.** All replies per hop are kept; a hop answered by several routers is marked `×N paths` and is never treated as a change.
+- **Route changes are changes of AS path.** Hop-by-hop IP comparison flagged almost every run (4,201 "changes" over 171 days for 141 targets); comparing the ordered AS path leaves a handful of real events — typically a transit-provider switch. A trace cut short by silent routers is compared leniently so it isn't mistaken for a change.
+- **Changes must be confirmed.** A changed path is recorded only if seen again on a confirming run (re-checked within ~15 minutes; Settings → Data → *Confirm after N runs*). The change is stamped with when it was first seen.
+- **On the chart.** Route changes appear as markers on the latency timeline, so you can see a path change and a latency shift together.
+- Reverse DNS is resolved in parallel; up to 50 historical path snapshots are kept per target; private/RFC-1918 hops are hidden from the public view.
+
+To clean up history recorded by the older address-based rule, run `node scripts/compact-traceroute-history.js --dry-run`, then without `--dry-run` (it snapshots the database first).
 
 ---
 
@@ -242,19 +249,24 @@ An **incident** opens when a target fails `N` probes in a row (Settings → Aler
 
 ### Notification channels
 
-| Type | URL format |
-|---|---|
-| Slack | `https://hooks.slack.com/services/T.../B.../...` |
-| Discord | `https://discord.com/api/webhooks/ID/TOKEN` |
-| ntfy | `https://ntfy.sh/TOPICNAME` (or self-hosted) |
-| Telegram | `tgram://BOTTOKEN/CHATID` |
-| Generic webhook | Any `https://` or `http://` URL |
+| Type | URL format | Notes |
+|---|---|---|
+| PagerDuty | `pagerduty://INTEGRATION_KEY` | Events API v2 key. Trigger on outage, **auto-resolve** on recovery (same dedup key). Pages for every outage — exempt from flood batching |
+| Opsgenie | `opsgenie://API_KEY` (EU: `…?region=eu`) | Creates an alert per outage, closes it on recovery. Exempt from flood batching |
+| Pushover | `pushover://USER_KEY@APP_TOKEN` | High-priority push for outages (bypasses quiet hours). Optional `?device=` `&sound=` |
+| ntfy | `https://ntfy.sh/TOPIC` | Protected topics: add `?token=tk_…` or use `https://user:pass@host/topic` |
+| Slack | `https://hooks.slack.com/services/T.../B.../...` | |
+| Discord | `https://discord.com/api/webhooks/ID/TOKEN` | |
+| Microsoft Teams | Workflows or Office 365 connector webhook URL | |
+| Gotify | `https://host/message?token=APP_TOKEN` | |
+| Telegram | `tgram://BOTTOKEN/CHATID` | |
+| Generic webhook | any `https://` or `http://` URL | JSON payload below |
 
-URLs pointing at link-local/cloud-metadata addresses (`169.254.x.x`) are refused. Set a **public base URL** in Settings → Alerting and every alert links to the target's page.
+Every channel can be limited to chosen **groups** (e.g. page PagerDuty only for core links) and can opt out of recovery messages. Transient failures (network errors, 5xx, 429) are retried; the channel list shows the last successful or failed delivery so a broken webhook doesn't fail silently. URLs pointing at link-local/cloud-metadata addresses (`169.254.x.x`) are refused. Set a **public base URL** in Settings → Alerting and every alert links to the target's page.
 
 ### Flood protection
 
-If more than 5 alerts fire within 60 seconds (a mass outage or mass recovery) further ones are held for 5 minutes and then sent as **one digest message** listing what went down and what recovered, so nothing is silently dropped.
+If more than 5 alerts fire within 60 seconds (a mass outage or mass recovery), further **chat** alerts are held for 5 minutes and then sent as **one digest message** listing what went down and what recovered, so nothing is silently dropped. **Paging** channels (PagerDuty, Opsgenie) are exempt: they de-duplicate on their side, and a mass outage is exactly when you want to be paged.
 
 ### Generic webhook payload
 
@@ -299,6 +311,38 @@ Changing your password, or turning 2FA on, signs out all your other sessions.
 - **Status badge**: `https://your-host/badge/<target-id>.svg` (add `?label=My%20Site`) — see *Share & export* on any target page for copy-paste Markdown/HTML.
 - **Incident feed**: `https://your-host/feed.atom`.
 - **Public API** (read-only, JSON): `/api/v1/summary`, `/groups`, `/incidents`, `/targets/:id`, `/targets/:id/results?range=`, `/targets/:id/availability?days=`.
+
+---
+
+## Private groups and targets
+
+In **Groups** and in the target form, switch off *Show on the public dashboard*. Private items are still probed, alert you and appear in the admin UI and `/metrics`, but their names, hosts, results, incidents, maintenance windows, badges and feed entries never appear on the public site or API. A private group hides all of its targets. Use this for internal infrastructure, tailnet addresses and office links.
+
+---
+
+## TV / wall-board mode
+
+Open `/tv` (or **TV mode** in the sidebar) on a display. It has no navigation, auto-refreshes every 30 s, keeps the screen awake where the browser allows, and rotates through scenes: **overview** (status, counts, 24 h latency), **groups** (every group sized to fit the screen), **problems** and **incidents** (skipped automatically when empty), and **performance** (targets slower than their own 7-day norm, and packet loss). If the data stops updating it shows a red *"Data may be out of date"* banner, so a dead probe worker can't hide behind a calm-looking screen.
+
+`/tv?views=overview,groups,group:3,target:12&interval=30&theme=dark&zoom=1.25` — scenes: `overview groups problems latency incidents allgroups group:ID target:ID`. Keys: `←` `→` change scene · `Space` pause · `F` fullscreen · `?` help. The page reloads every 6 hours to pick up new versions.
+
+---
+
+## Example target sets
+
+`examples/nz-rsp-targets.json` is a starter set for an NZ retail service provider (NZ-hosted infrastructure, Pacific, `.nz` and root DNS, plus regions often missing from hosting-provider lists). Import it with Settings → Data → Import → *Add what's missing*. See `examples/README.md` for why CDN-fronted sites make poor regional targets.
+
+---
+
+## Development and testing
+
+```bash
+npm test          # unit + end-to-end tests (spawns the real servers on a temp database)
+npm run lint      # ESLint on the backend, scripts and tests
+npm run build && npm run test:ui   # browser tests (Playwright + Chromium)
+```
+
+GitHub Actions runs lint, the tests on Node 20 and 22, both builds and the browser suite on every push and pull request. The browser suite exists because several regressions (a charting upgrade that silently removed the spread bands, a missing import that crashed a modal) were invisible to unit tests and to the build.
 
 ---
 

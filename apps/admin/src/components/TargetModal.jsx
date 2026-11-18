@@ -15,6 +15,7 @@ export function makeEmpty() {
     packet_count: 20,
     enabled: 1,
     notes: '',
+    is_public: 1,
   };
 }
 
@@ -41,6 +42,7 @@ export default function TargetModal({ target, groups, onSave, onClose }) {
       packet_count: Number(form.packet_count),
       enabled: form.enabled ? 1 : 0,
       notes: form.notes || null,
+      is_public: form.is_public ? 1 : 0,
     };
     try {
       if (target) await mut.mutateAsync({ url: `/api/admin/targets/${target.id}`, method: 'PUT', body });
@@ -94,6 +96,10 @@ export default function TargetModal({ target, groups, onSave, onClose }) {
           <div className="field row">
             <Toggle checked={!!form.enabled} onChange={(v) => set('enabled', v ? 1 : 0)} />
             <span style={{ fontSize: 13 }}>Enabled</span>
+          </div>
+          <div className="field row">
+            <Toggle checked={!!form.is_public} onChange={(v) => set('is_public', v ? 1 : 0)} />
+            <span style={{ fontSize: 13 }}>Show on the public dashboard</span>
           </div>
           <div className="modal-actions">
             <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>

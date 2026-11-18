@@ -16,7 +16,7 @@ module.exports = async function summaryRoutes(app) {
   app.get('/summary', async () => {
     const db = getDb();
     const now = Math.floor(Date.now() / 1000);
-    const states = getTargetStates(db, now);
+    const states = getTargetStates(db, now, null, { publicOnly: true });
 
     // A target that is down *during maintenance* is expected, so it is counted under
     // "maintenance" rather than "offline"
@@ -36,7 +36,10 @@ module.exports = async function summaryRoutes(app) {
        ORDER BY period_start ASC`
     ).all(now - 86400);
 
-    const windows = activeWindows(db, now).map((w) => ({
+    // A window scoped to a private group/target must not leak that group's name
+    const hidden = (w) => (w.scope === 'group' && !db.prepare('SELECT 1 FROM groups WHERE id = ? AND is_public = 1').get(w.scope_id))
+      || (w.scope === 'target' && !db.prepare('SELECT 1 FROM targets t JOIN groups g ON g.id = t.group_id WHERE t.id = ? AND t.is_public = 1 AND g.is_public = 1').get(w.scope_id));
+    const windows = activeWindows(db, now).filter((w) => !hidden(w)).map((w) => ({
       name: w.name,
       scope: w.scope,
       ends_at: w.end,

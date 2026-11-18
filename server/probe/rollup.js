@@ -3,12 +3,14 @@
 const { getDb } = require('../db/db');
 const { RAW_FAIL, RAW_LOSS, AGG_FAIL } = require('../shared/sql');
 
-const COLS = `(target_id, period_start, resolution, latency_min, latency_avg, latency_max, latency_mdev, packet_loss, sample_count, fail_count)`;
+const COLS = `(target_id, period_start, resolution, latency_min, latency_avg, latency_max, latency_mdev, latency_p50, latency_p95, packet_loss, sample_count, fail_count)`;
 const OVERWRITE = `ON CONFLICT(target_id, period_start, resolution) DO UPDATE SET
   latency_min  = excluded.latency_min,
   latency_avg  = excluded.latency_avg,
   latency_max  = excluded.latency_max,
   latency_mdev = excluded.latency_mdev,
+  latency_p50  = excluded.latency_p50,
+  latency_p95  = excluded.latency_p95,
   packet_loss  = excluded.packet_loss,
   sample_count = excluded.sample_count,
   fail_count   = excluded.fail_count`;
@@ -31,6 +33,8 @@ function rollup5MinSince(db, since, onConflict = OVERWRITE) {
             AVG(latency_avg),
             MAX(latency_max),
             AVG(latency_mdev),
+            AVG(latency_p50),
+            AVG(latency_p95),
             AVG(${RAW_LOSS}),
             COUNT(*),
             SUM(${RAW_FAIL})
@@ -52,6 +56,8 @@ function rollup1HourSince(db, since, onConflict = OVERWRITE) {
             AVG(latency_avg),
             MAX(latency_max),
             AVG(latency_mdev),
+            AVG(latency_p50),
+            AVG(latency_p95),
             AVG(packet_loss),
             SUM(sample_count),
             SUM(${AGG_FAIL})

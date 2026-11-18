@@ -3,7 +3,7 @@
 // Hostnames, IPv4 and IPv6 literals (optionally with a %zone; IPv6 may start with ':' as in
 // ::1). Must not start with '-' or '.'
 // so a host can never be interpreted as a command-line option by ping/traceroute.
-const HOST_RE = /^[A-Za-z0-9_:][A-Za-z0-9_.:%\-]*$/;
+const HOST_RE = /^[A-Za-z0-9_:][A-Za-z0-9_.:%-]*$/;
 
 function isSafeHost(host) {
   return typeof host === 'string' && host.length > 0 && host.length <= 255 && HOST_RE.test(host);
@@ -18,8 +18,16 @@ module.exports = { isSafeHost, HOST_RE };
  * Returns an error string, or null when the URL is acceptable.
  */
 function validateChannelUrl(type, url) {
-  if (type === 'telegram') {
-    return /^tgram:\/\/[^/\s]+\/\S+$/.test(url) ? null : 'Telegram URL must look like tgram://BOT_TOKEN/CHAT_ID';
+  switch (type) {
+    case 'telegram':
+      return /^tgram:\/\/[^/\s]+\/\S+$/.test(url) ? null : 'Telegram URL must look like tgram://BOT_TOKEN/CHAT_ID';
+    case 'pagerduty':
+      return /^pagerduty:\/\/[A-Za-z0-9]{16,64}$/.test(url) ? null : 'PagerDuty URL must look like pagerduty://INTEGRATION_KEY (the Events API v2 routing key)';
+    case 'pushover':
+      return /^pushover:\/\/[A-Za-z0-9]{20,40}@[A-Za-z0-9]{20,40}(\?[\w=&.-]*)?$/.test(url) ? null : 'Pushover URL must look like pushover://USER_KEY@APP_TOKEN';
+    case 'opsgenie':
+      return /^opsgenie:\/\/[A-Za-z0-9-]{20,60}(\?region=(us|eu))?$/.test(url) ? null : 'Opsgenie URL must look like opsgenie://API_KEY (add ?region=eu for the EU instance)';
+    default: break;
   }
   let u;
   try { u = new URL(url); } catch { return 'Invalid URL'; }
@@ -38,7 +46,7 @@ module.exports.validateChannelUrl = validateChannelUrl;
 /** tcp targets are written "host:port" or "[v6addr]:port". */
 function parseTcpTarget(value) {
   if (typeof value !== 'string') return null;
-  const m = value.match(/^\[([0-9a-fA-F:.%]+)\]:(\d{1,5})$/) || value.match(/^([A-Za-z0-9_][A-Za-z0-9_.\-]*):(\d{1,5})$/);
+  const m = value.match(/^\[([0-9a-fA-F:.%]+)\]:(\d{1,5})$/) || value.match(/^([A-Za-z0-9_][A-Za-z0-9_.-]*):(\d{1,5})$/);
   if (!m) return null;
   const port = parseInt(m[2], 10);
   if (port < 1 || port > 65535) return null;

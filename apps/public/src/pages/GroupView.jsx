@@ -1,9 +1,25 @@
-import { useMemo, useEffect, useRef } from 'react';
+import { useMemo, useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useGroups, useGroupResults } from '../hooks/useApi';
 import LatencyChart from '../components/LatencyChart';
 import StatusBadge from '../components/StatusBadge';
 import { fmtMs, fmtPct, fmtAgo, latencyColor, lossColor, effectiveStatus } from '../lib';
+
+// Only mount a chart once its card scrolls near the viewport — a 140-target group no longer
+// builds 140 SVG charts up front.
+function Lazy({ height, children }) {
+  const ref = useRef(null);
+  const [seen, setSeen] = useState(typeof IntersectionObserver === 'undefined');
+  useEffect(() => {
+    if (seen || !ref.current) return undefined;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) { setSeen(true); io.disconnect(); }
+    }, { rootMargin: '300px' });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, [seen]);
+  return <div ref={ref} style={{ minHeight: height }}>{seen ? children : null}</div>;
+}
 
 function TargetCard({ target, series, loading }) {
   const age = fmtAgo(target.last_checked);
@@ -27,9 +43,11 @@ function TargetCard({ target, series, loading }) {
       )}
       {target.notes && <div className="target-card-note">{target.notes}</div>}
 
-      {loading
-        ? <div className="chart-empty" style={{ height: 88 }}><div className="mini-spinner" /></div>
-        : <LatencyChart data={series} probeType={target.probe_type} range="12h" mini />}
+      <Lazy height={88}>
+        {loading
+          ? <div className="chart-empty" style={{ height: 88 }}><div className="mini-spinner" /></div>
+          : <LatencyChart data={series} probeType={target.probe_type} range="12h" mini />}
+      </Lazy>
 
       <div className="target-card-stats">
         {target.latency_min != null && <div className="target-card-stat"><span className="target-card-stat-val" style={{ color: 'var(--success)' }}>{fmtMs(target.latency_min)}</span><span>min</span></div>}
@@ -39,6 +57,33 @@ function TargetCard({ target, series, loading }) {
         {age && <div className="target-card-stat" style={{ marginLeft: 'auto' }}><span style={{ fontSize: 11, color: 'var(--text-dim)' }}>{age}</span></div>}
       </div>
     </Link>
+  );
+}
+
+function ListView({ targets }) {
+  return (
+    <div className="panel" style={{ padding: 0, overflowX: 'auto' }}>
+      <table className="list-table">
+        <thead>
+          <tr><th>Status</th><th>Target</th><th>Host</th><th>Avg</th><th>Min</th><th>Max</th><th>Loss</th><th>Uptime 24h</th><th>Checked</th></tr>
+        </thead>
+        <tbody>
+          {targets.map((t) => (
+            <tr key={t.id}>
+              <td><StatusBadge status={effectiveStatus(t)} /></td>
+              <td><Link to={`/target/${t.id}`} style={{ fontWeight: 500 }}>{t.name}</Link></td>
+              <td className="mono muted">{t.host}</td>
+              <td style={{ color: latencyColor(t.latency_avg) }}>{fmtMs(t.latency_avg)}</td>
+              <td className="muted">{fmtMs(t.latency_min)}</td>
+              <td className="muted">{fmtMs(t.latency_max)}</td>
+              <td style={{ color: lossColor(t.packet_loss) }}>{fmtPct(t.packet_loss)}</td>
+              <td>{t.uptime_24h == null ? '—' : `${t.uptime_24h.toFixed(t.uptime_24h >= 99.95 ? 2 : 1)}%`}</td>
+              <td className="muted">{fmtAgo(t.last_checked) || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -68,6 +113,7 @@ export default function GroupView() {
   const sort = params.get('sort') || 'name';
   const filter = params.get('show') || 'all';
   const q = params.get('q') || '';
+  const view = params.get('view') === 'list' ? 'list' : 'cards';
   const searchRef = useRef(null);
 
   const update = (k, v, def) => setParams((p) => { const n = new URLSearchParams(p); if (!v || v === def) n.delete(k); else n.set(k, v); return n; }, { replace: true });
@@ -113,6 +159,10 @@ export default function GroupView() {
             <button className={filter === 'all' ? 'on' : ''} onClick={() => update('show', 'all', 'all')}>All</button>
             <button className={filter === 'problems' ? 'on' : ''} onClick={() => update('show', 'problems', 'all')}>Problems{problems ? ` (${problems})` : ''}</button>
           </div>
+          <div className="seg" role="group" aria-label="View">
+            <button className={view === 'cards' ? 'on' : ''} onClick={() => update('view', 'cards', 'cards')}>Cards</button>
+            <button className={view === 'list' ? 'on' : ''} onClick={() => update('view', 'list', 'cards')}>List</button>
+          </div>
           <select className="toolbar-select" value={sort} onChange={(e) => update('sort', e.target.value, 'name')} aria-label="Sort by">
             {SORTS.map((o) => <option key={o.value} value={o.value}>Sort: {o.label}</option>)}
           </select>
@@ -121,6 +171,8 @@ export default function GroupView() {
 
       {shown.length === 0 ? (
         <div className="empty-note">{group.targets.length === 0 ? 'No targets in this group.' : filter === 'problems' && !q ? 'No problems — everything in this group is healthy.' : 'No targets match.'}</div>
+      ) : view === 'list' ? (
+        <ListView targets={shown} />
       ) : (
         <div className="target-grid">
           {shown.map((t) => <TargetCard key={t.id} target={t} series={series.data?.targets?.[t.id]} loading={series.isLoading} />)}

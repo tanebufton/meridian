@@ -8,6 +8,7 @@ import { useSummary } from './hooks/useApi';
 const GroupView = lazy(() => import('./pages/GroupView'));
 const TargetDetail = lazy(() => import('./pages/TargetDetail'));
 const Incidents = lazy(() => import('./pages/Incidents'));
+const TV = lazy(() => import('./pages/TV'));
 
 // Put the state of the world in the tab title, so a pinned tab works as a status light
 function useTabTitle() {
@@ -23,6 +24,8 @@ function useTabTitle() {
 export default function App() {
   useTabTitle();
   const { pathname } = useLocation();
+  // Wall-board mode has no navigation chrome at all
+  if (pathname === '/tv') return <Suspense fallback={<div className="spinner" />}><TV /></Suspense>;
   // Return to the top on navigation (the content pane scrolls, not the window)
   useEffect(() => { document.querySelector('.content-area')?.scrollTo(0, 0); }, [pathname]);
 

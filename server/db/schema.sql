@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS groups (
   name        TEXT NOT NULL,
   description TEXT,
   sort_order  INTEGER NOT NULL DEFAULT 0,
-  created_at  INTEGER NOT NULL DEFAULT (unixepoch())
+  created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+  is_public   INTEGER NOT NULL DEFAULT 1  -- 0 = hidden from the public dashboard/API
 );
 
 CREATE TABLE IF NOT EXISTS targets (
@@ -18,7 +19,8 @@ CREATE TABLE IF NOT EXISTS targets (
   packet_count     INTEGER NOT NULL DEFAULT 10,
   enabled          INTEGER NOT NULL DEFAULT 1,
   notes            TEXT,
-  created_at       INTEGER NOT NULL DEFAULT (unixepoch())
+  created_at       INTEGER NOT NULL DEFAULT (unixepoch()),
+  is_public        INTEGER NOT NULL DEFAULT 1  -- 0 = hidden from the public dashboard/API
 );
 
 CREATE TABLE IF NOT EXISTS probe_results (
@@ -29,6 +31,8 @@ CREATE TABLE IF NOT EXISTS probe_results (
   latency_avg   REAL,
   latency_max   REAL,
   latency_mdev  REAL,
+  latency_p50   REAL,
+  latency_p95   REAL,
   packet_loss   REAL,
   rtts_json     TEXT,
   dns_time      REAL,
@@ -46,6 +50,8 @@ CREATE TABLE IF NOT EXISTS probe_aggregates (
   latency_avg   REAL,
   latency_max   REAL,
   latency_mdev  REAL,
+  latency_p50   REAL,
+  latency_p95   REAL,
   packet_loss   REAL,
   sample_count  INTEGER NOT NULL,
   fail_count    INTEGER,
@@ -83,17 +89,23 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
 
 -- Traceroute results cache (one row per target, refreshed ~daily)
 CREATE TABLE IF NOT EXISTS traceroute_cache (
-  target_id   INTEGER PRIMARY KEY REFERENCES targets(id) ON DELETE CASCADE,
-  result_json TEXT NOT NULL,
-  ran_at      INTEGER NOT NULL
+  target_id     INTEGER PRIMARY KEY REFERENCES targets(id) ON DELETE CASCADE,
+  result_json   TEXT NOT NULL,
+  ran_at        INTEGER NOT NULL,
+  as_path_json  TEXT,             -- ordered AS numbers of the latest run
+  pending_json  TEXT,             -- a changed path seen once, awaiting confirmation
+  pending_count INTEGER NOT NULL DEFAULT 0,
+  method        TEXT,             -- icmp | tcp | udp: how the latest run was made
+  complete      INTEGER NOT NULL DEFAULT 0  -- 1 if the run reached the destination
 );
 
 -- Traceroute path-change history (one row per dramatic route change)
 CREATE TABLE IF NOT EXISTS traceroute_history (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  target_id   INTEGER NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
-  result_json TEXT NOT NULL,
-  ran_at      INTEGER NOT NULL
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  target_id    INTEGER NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+  result_json  TEXT NOT NULL,
+  ran_at       INTEGER NOT NULL,
+  as_path_json TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_traceroute_history_target_ran_at ON traceroute_history(target_id, ran_at DESC);
 
@@ -105,12 +117,17 @@ CREATE INDEX IF NOT EXISTS idx_probe_results_target_timestamp ON probe_results(t
 CREATE INDEX IF NOT EXISTS idx_probe_results_timestamp ON probe_results(timestamp);
 
 CREATE TABLE IF NOT EXISTS notification_channels (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  name       TEXT NOT NULL,
-  type       TEXT NOT NULL CHECK(type IN ('webhook','slack','discord','ntfy','telegram')),
-  url        TEXT NOT NULL,
-  enabled    INTEGER NOT NULL DEFAULT 1,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT NOT NULL,
+  type          TEXT NOT NULL,   -- validated in the app (see shared/schemas.js CHANNEL_TYPES)
+  url           TEXT NOT NULL,
+  enabled       INTEGER NOT NULL DEFAULT 1,
+  created_at    INTEGER NOT NULL DEFAULT (unixepoch()),
+  groups_json   TEXT,            -- JSON array of group ids this channel is limited to (NULL = all)
+  send_recovery INTEGER NOT NULL DEFAULT 1,
+  last_ok_at    INTEGER,
+  last_error    TEXT,
+  last_error_at INTEGER
 );
 
 -- Per-target per-resolution range queries (24h/7d/30d chart data)
@@ -177,3 +194,18 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON admin_sessions(expires_at);
+
+-- Origin-AS lookups (Team Cymru, over DNS). Cached so a route is resolved once, not every run.
+CREATE TABLE IF NOT EXISTS asn_cache (
+  prefix     TEXT PRIMARY KEY,   -- /24 (IPv4) or /48 (IPv6) the lookup was made for
+  asn        INTEGER,            -- NULL = looked up, no origin found
+  bgp_prefix TEXT,
+  cc         TEXT,
+  fetched_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS asn_info (
+  asn        INTEGER PRIMARY KEY,
+  name       TEXT,
+  cc         TEXT,
+  fetched_at INTEGER NOT NULL
+);

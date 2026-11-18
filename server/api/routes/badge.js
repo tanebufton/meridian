@@ -2,6 +2,7 @@
 
 const { getDb } = require('../../db/db');
 const { getTargetStates } = require('../../shared/status');
+const { publicTarget } = require('../../shared/visibility');
 
 // Embeddable status badge:  <img src="https://your-host/badge/12.svg">
 // Optional ?label=My%20Site overrides the left-hand text.
@@ -32,11 +33,11 @@ module.exports = async function badgeRoutes(app) {
     const id = parseInt(m[1], 10);
 
     const db = getDb();
-    const target = db.prepare('SELECT id, name, enabled FROM targets WHERE id = ?').get(id);
+    const target = publicTarget(db, id);
     if (!target) return reply.status(404).send({ error: 'Not found' });
 
     const label = String(req.query.label || target.name).slice(0, 40);
-    const s = getTargetStates(db, undefined, id)[0];
+    const s = getTargetStates(db, undefined, id, { publicOnly: true })[0];
 
     let value, color;
     if (!s) { value = 'paused'; color = COLORS.UNKNOWN; }

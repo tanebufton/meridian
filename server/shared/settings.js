@@ -31,6 +31,9 @@ function defaults() {
     alert_after_failures: 2,      // consecutive DOWN probes before an incident opens / alert fires
     recover_after_successes: 1,   // consecutive non-DOWN probes before an incident closes
     renotify_minutes: 0,          // re-alert on still-open, unacknowledged incidents (0 = off)
+    // Traceroute: 'auto' tries ICMP, then TCP, then UDP (UDP alone reaches few destinations)
+    traceroute_method: 'auto',
+    route_confirm_runs: 2,        // a changed AS path must be seen this many runs in a row to be recorded
     // Public banner
     banner_enabled: false,
     banner_text: null,
@@ -43,10 +46,10 @@ let cache = { file: null, mtimeMs: -1, overrides: {} };
 
 function readOverrides() {
   const file = settingsFile();
-  let mtimeMs = 0;
+  let mtimeMs;
   try { mtimeMs = fs.statSync(file).mtimeMs; } catch { cache = { file, mtimeMs: 0, overrides: {} }; return cache.overrides; }
   if (cache.file === file && cache.mtimeMs === mtimeMs) return cache.overrides;
-  let overrides = {};
+  let overrides;
   try { overrides = JSON.parse(fs.readFileSync(file, 'utf8')) || {}; } catch { overrides = {}; }
   cache = { file, mtimeMs, overrides };
   return overrides;

@@ -14,6 +14,7 @@ const ImportTargetSchema = z.object({
   packet_count: z.number().int().min(1).max(100).default(5),
   enabled: z.boolean().default(true),
   notes: z.string().max(500).optional().nullable(),
+  public: z.boolean().default(true),
 }).superRefine((t, ctx) => {
   const problem = validateHostFor(t.probe_type, t.host);
   if (problem) ctx.addIssue({ code: 'custom', path: ['host'], message: `${t.name}: ${problem}` });
@@ -23,6 +24,7 @@ const ImportGroupSchema = z.object({
   name: z.string().trim().min(1).max(100),
   description: z.string().max(500).optional().nullable(),
   sort_order: z.number().int().min(0).default(0),
+  public: z.boolean().default(true),
   targets: z.array(ImportTargetSchema).default([]),
 });
 
@@ -41,11 +43,11 @@ module.exports = async function configRoutes(app) {
   app.get('/config/export', auth, async () => {
     const db = getDb();
     const groups = db.prepare(
-      'SELECT id, name, description, sort_order FROM groups ORDER BY sort_order ASC, id ASC'
+      'SELECT id, name, description, sort_order, is_public FROM groups ORDER BY sort_order ASC, id ASC'
     ).all();
 
     const targets = db.prepare(
-      'SELECT group_id, name, host, probe_type, interval_seconds, packet_count, enabled, notes FROM targets ORDER BY id ASC'
+      'SELECT group_id, name, host, probe_type, interval_seconds, packet_count, enabled, notes, is_public FROM targets ORDER BY id ASC'
     ).all();
 
     const targetsByGroup = {};
@@ -59,6 +61,7 @@ module.exports = async function configRoutes(app) {
         packet_count: t.packet_count,
         enabled: t.enabled === 1,
         notes: t.notes || null,
+        public: t.is_public === 1,
       });
     }
 
@@ -69,6 +72,7 @@ module.exports = async function configRoutes(app) {
         name: g.name,
         description: g.description || null,
         sort_order: g.sort_order,
+        public: g.is_public === 1,
         targets: targetsByGroup[g.id] || [],
       })),
     };
@@ -101,22 +105,22 @@ module.exports = async function configRoutes(app) {
 
       const findGroup = db.prepare('SELECT id FROM groups WHERE name = ?');
       const findTarget = db.prepare('SELECT 1 FROM targets WHERE group_id = ? AND name = ? AND host = ?');
-      const addGroup = db.prepare('INSERT INTO groups (name, description, sort_order) VALUES (?, ?, ?)');
+      const addGroup = db.prepare('INSERT INTO groups (name, description, sort_order, is_public) VALUES (?, ?, ?, ?)');
       const addTarget = db.prepare(
-        `INSERT INTO targets (group_id, name, host, probe_type, interval_seconds, packet_count, enabled, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO targets (group_id, name, host, probe_type, interval_seconds, packet_count, enabled, notes, is_public)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
 
       let newGroups = 0, newTargets = 0, skipped = 0;
       groups.forEach((g, i) => {
         let gid = mode === 'merge' ? findGroup.get(g.name)?.id : undefined;
         if (!gid) {
-          gid = addGroup.run(g.name, g.description ?? null, g.sort_order ?? i).lastInsertRowid;
+          gid = addGroup.run(g.name, g.description ?? null, g.sort_order ?? i, g.public ? 1 : 0).lastInsertRowid;
           newGroups++;
         }
         for (const t of g.targets) {
           if (mode === 'merge' && findTarget.get(gid, t.name, t.host)) { skipped++; continue; }
-          addTarget.run(gid, t.name, t.host, t.probe_type, t.interval_seconds, t.packet_count, t.enabled ? 1 : 0, t.notes ?? null);
+          addTarget.run(gid, t.name, t.host, t.probe_type, t.interval_seconds, t.packet_count, t.enabled ? 1 : 0, t.notes ?? null, t.public ? 1 : 0);
           newTargets++;
         }
       });

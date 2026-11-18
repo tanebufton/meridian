@@ -33,52 +33,7 @@ function pingHost(host, packetCount, useIPv6 = false) {
     proc.stdout.on('data', (d) => { stdout += d; });
     proc.stderr.on('data', (d) => { stderr += d; });
 
-    proc.on('close', () => {
-      // Parse individual packet RTTs: "64 bytes from X: icmp_seq=N ttl=Y time=Z ms"
-      const rttBySeq = {};
-      for (const line of stdout.split('\n')) {
-        const m = line.match(/icmp_seq=(\d+).*time=([\d.]+)/);
-        if (m) rttBySeq[parseInt(m[1], 10)] = parseFloat(m[2]);
-      }
-      // Ordered array — null means that packet was lost (seq is 1-based)
-      const rtts = Array.from({ length: packetCount }, (_, i) => rttBySeq[i + 1] ?? null);
-
-      // Summary line: "rtt min/avg/max/mdev = X/Y/Z/W ms"
-      const rttMatch = stdout.match(/(?:rtt|round-trip)\s+min\/avg\/max(?:\/\w+)?\s*=\s*([\d.]+)\/([\d.]+)\/([\d.]+)\/([\d.]+)/);
-
-      // Packet loss: "N% packet loss"
-      const lossMatch = stdout.match(/([\d.]+)%\s+packet\s+loss/);
-      const packet_loss = lossMatch ? parseFloat(lossMatch[1]) : 100;
-
-      // Resolved IP: "PING hostname (1.2.3.4) 56(84) bytes" — same shape for v4 and v6
-      const resolvedMatch = stdout.match(/^PING\s+\S+\s+\(([0-9a-fA-F:.]+)\)/m);
-      const resolved_ip = resolvedMatch ? resolvedMatch[1] : null;
-
-      if (rttMatch) {
-        resolve({
-          latency_min:  parseFloat(rttMatch[1]),
-          latency_avg:  parseFloat(rttMatch[2]),
-          latency_max:  parseFloat(rttMatch[3]),
-          latency_mdev: parseFloat(rttMatch[4]),
-          packet_loss,
-          rtts,
-          resolved_ip,
-          error: null,
-        });
-      } else {
-        const errMsg = stderr.trim() || stdout.trim() || 'ping failed';
-        resolve({
-          latency_min:  null,
-          latency_avg:  null,
-          latency_max:  null,
-          latency_mdev: null,
-          packet_loss:  100,
-          rtts,
-          resolved_ip,
-          error: errMsg.slice(0, 500),
-        });
-      }
-    });
+    proc.on('close', () => resolve(parsePingOutput(stdout, stderr, packetCount)));
 
     proc.on('error', (err) => {
       resolve({
@@ -95,8 +50,47 @@ function pingHost(host, packetCount, useIPv6 = false) {
   });
 }
 
+/**
+ * Turn the text of a finished `ping` run into a probe result. Pure, so it can be tested against
+ * captured output (iputils and busybox formats, total loss, resolver errors...).
+ */
+function parsePingOutput(stdout, stderr, packetCount) {
+  // Individual packet RTTs: "64 bytes from X: icmp_seq=N ttl=Y time=Z ms"
+  const rttBySeq = {};
+  for (const line of stdout.split('\n')) {
+    const m = line.match(/icmp_seq=(\d+).*time=([\d.]+)/);
+    if (m) rttBySeq[parseInt(m[1], 10)] = parseFloat(m[2]);
+  }
+  // Ordered array — null means that packet was lost (seq is 1-based)
+  const rtts = Array.from({ length: packetCount }, (_, i) => rttBySeq[i + 1] ?? null);
+
+  // Summary line: "rtt min/avg/max/mdev = X/Y/Z/W ms" (iputils) or "round-trip min/avg/max = X/Y/Z ms" (busybox)
+  const rttMatch = stdout.match(/(?:rtt|round-trip)\s+min\/avg\/max(?:\/\w+)?\s*=\s*([\d.]+)\/([\d.]+)\/([\d.]+)(?:\/([\d.]+))?/);
+  const lossMatch = stdout.match(/([\d.]+)%\s+packet\s+loss/);
+  const packet_loss = lossMatch ? parseFloat(lossMatch[1]) : 100;
+
+  // Resolved IP: "PING hostname (1.2.3.4) 56(84) bytes" — same shape for v4 and v6
+  const resolvedMatch = stdout.match(/^PING\s+\S+\s+\(([0-9a-fA-F:.]+)\)/m);
+  const resolved_ip = resolvedMatch ? resolvedMatch[1] : null;
+
+  if (rttMatch) {
+    return {
+      latency_min:  parseFloat(rttMatch[1]),
+      latency_avg:  parseFloat(rttMatch[2]),
+      latency_max:  parseFloat(rttMatch[3]),
+      latency_mdev: rttMatch[4] !== undefined ? parseFloat(rttMatch[4]) : null,
+      packet_loss, rtts, resolved_ip, error: null,
+    };
+  }
+  const errMsg = stderr.trim() || stdout.trim() || 'ping failed';
+  return {
+    latency_min: null, latency_avg: null, latency_max: null, latency_mdev: null,
+    packet_loss: 100, rtts, resolved_ip, error: errMsg.slice(0, 500),
+  };
+}
+
 function ping6Host(host, packetCount) {
   return pingHost(host, packetCount, true);
 }
 
-module.exports = { pingHost, ping6Host };
+module.exports = { pingHost, ping6Host, parsePingOutput };

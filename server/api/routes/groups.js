@@ -3,6 +3,7 @@
 const { getDb } = require('../../db/db');
 const { getStatus } = require('../../shared/constants');
 const { getTargetStates } = require('../../shared/status');
+const { publicGroup } = require('../../shared/visibility');
 const { buildResultsQuery } = require('../../shared/results');
 const { ResultsRangeSchema } = require('../../shared/schemas');
 
@@ -12,7 +13,7 @@ module.exports = async function groupRoutes(app) {
     const db = getDb();
 
     const groups = db.prepare(
-      'SELECT id, name, description, sort_order FROM groups ORDER BY sort_order ASC, id ASC'
+      'SELECT id, name, description, sort_order FROM groups WHERE is_public = 1 ORDER BY sort_order ASC, id ASC'
     ).all();
 
     const targets = db.prepare(
@@ -25,7 +26,7 @@ module.exports = async function groupRoutes(app) {
          SELECT r.id FROM probe_results r WHERE r.target_id = t.id ORDER BY r.timestamp DESC, r.id DESC LIMIT 1
        )
        LEFT JOIN target_uptime tu ON tu.target_id = t.id
-       WHERE t.enabled = 1
+       WHERE t.enabled = 1 AND t.is_public = 1 AND t.group_id IN (SELECT id FROM groups WHERE is_public = 1)
        ORDER BY t.id ASC`
     ).all();
 
@@ -41,8 +42,15 @@ module.exports = async function groupRoutes(app) {
         .map((r) => getStatus(r.packet_loss, r.dns_success, t.probe_type, !!r.error));
     }
 
+    // Each target's typical latency over the last 7 days (hourly aggregates, indexed), so the UI can
+    // say "slower than usual" instead of just ranking by distance
+    const base = new Map(db.prepare(
+      `SELECT target_id, AVG(latency_avg) AS v FROM probe_aggregates
+       WHERE resolution = '1hour' AND period_start >= ? AND latency_avg IS NOT NULL GROUP BY target_id`
+    ).all(Math.floor(Date.now() / 1000) - 7 * 86400).map((r) => [r.target_id, r.v]));
+
     // Maintenance + open-incident overlay (shared with /metrics and /summary)
-    const overlay = new Map(getTargetStates(db).map((st) => [st.id, st]));
+    const overlay = new Map(getTargetStates(db, undefined, null, { publicOnly: true }).map((st) => [st.id, st]));
 
     const targetsByGroup = {};
     for (const t of targets) {
@@ -62,6 +70,7 @@ module.exports = async function groupRoutes(app) {
         resolved_ip: t.resolved_ip,
         uptime_24h: t.uptime_24h,
         last_checked: t.timestamp,
+        latency_7d: base.get(t.id) ?? null,
         recent_statuses: recentByTarget[t.id] || [],
         in_maintenance: overlay.get(t.id)?.in_maintenance ?? false,
         maintenance_ends_at: overlay.get(t.id)?.maintenance_ends_at ?? null,
@@ -88,9 +97,9 @@ module.exports = async function groupRoutes(app) {
     if (!range.success) return reply.status(400).send({ error: 'Invalid range' });
 
     const db = getDb();
-    if (!db.prepare('SELECT id FROM groups WHERE id = ?').get(id)) return reply.status(404).send({ error: 'Not found' });
+    if (!publicGroup(db, id)) return reply.status(404).send({ error: 'Not found' });
 
-    const ids = db.prepare('SELECT id FROM targets WHERE group_id = ? AND enabled = 1').all(id).map((t) => t.id);
+    const ids = db.prepare('SELECT id FROM targets WHERE group_id = ? AND enabled = 1 AND is_public = 1').all(id).map((t) => t.id);
     const targets = {};
     const r2 = (v) => (v == null ? null : Math.round(v * 100) / 100);
     for (const tid of ids) {

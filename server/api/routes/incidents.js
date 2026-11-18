@@ -2,6 +2,7 @@
 
 const { getDb } = require('../../db/db');
 const { loadSettings } = require('../../shared/settings');
+const { PUBLIC_TARGET_SQL } = require('../../shared/visibility');
 
 // Public view of incidents. Deliberately omits the internal cause string (which can be a
 // raw resolver/ping error) and the acknowledging admin's name and note.
@@ -10,7 +11,8 @@ const SELECT = `SELECT i.id, i.target_id, t.name AS target_name, g.name AS group
                        (i.ack_at IS NOT NULL) AS acknowledged
                 FROM incidents i
                 JOIN targets t ON t.id = i.target_id
-                JOIN groups g ON g.id = t.group_id`;
+                JOIN groups g ON g.id = t.group_id
+                WHERE ${PUBLIC_TARGET_SQL}`;
 
 const shape = (r) => ({
   id: r.id,
@@ -34,7 +36,7 @@ module.exports = async function incidentRoutes(app) {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
     const since = Math.floor(Date.now() / 1000) - days * 86400;
     const rows = getDb().prepare(
-      `${SELECT} WHERE i.ended_at IS NULL OR i.started_at >= ?
+      `${SELECT} AND (i.ended_at IS NULL OR i.started_at >= ?)
        ORDER BY (i.ended_at IS NULL) DESC, i.started_at DESC LIMIT ?`
     ).all(since, limit);
     return { days, incidents: rows.map(shape) };
@@ -44,7 +46,7 @@ module.exports = async function incidentRoutes(app) {
   app.get('/api/v1/targets/:id/incidents', async (req, reply) => {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id) || id < 1) return reply.status(400).send({ error: 'Invalid id' });
-    const rows = getDb().prepare(`${SELECT} WHERE i.target_id = ? ORDER BY i.started_at DESC LIMIT 50`).all(id);
+    const rows = getDb().prepare(`${SELECT} AND i.target_id = ? ORDER BY i.started_at DESC LIMIT 50`).all(id);
     return { incidents: rows.map(shape) };
   });
 

@@ -49,7 +49,7 @@ function readSource(source) {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
     } catch (err) {
-      throw new Error(`SSH failed: ${err.stderr || err.message}`);
+      throw new Error(`SSH failed: ${err.stderr || err.message}`, { cause: err });
     }
   }
 

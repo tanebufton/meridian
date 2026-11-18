@@ -11,7 +11,7 @@ module.exports = async function groupRoutes(app) {
   app.get('/groups', auth, async () => {
     const db = getDb();
     const groups = db.prepare(
-      `SELECT g.id, g.name, g.description, g.sort_order, g.created_at,
+      `SELECT g.id, g.name, g.description, g.sort_order, g.created_at, g.is_public,
               COUNT(t.id) AS target_count,
               SUM(CASE WHEN t.enabled = 1 THEN 1 ELSE 0 END) AS enabled_count
        FROM groups g
@@ -27,11 +27,11 @@ module.exports = async function groupRoutes(app) {
     const result = GroupSchema.safeParse(req.body);
     if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message ? `${result.error.issues[0].path.join('.') || 'request'}: ${result.error.issues[0].message}` : 'Invalid request' });
 
-    const { name, description, sort_order } = result.data;
+    const { name, description, sort_order, is_public } = result.data;
     const db = getDb();
     const info = db.prepare(
-      'INSERT INTO groups (name, description, sort_order) VALUES (?, ?, ?)'
-    ).run(name, description ?? null, sort_order);
+      'INSERT INTO groups (name, description, sort_order, is_public) VALUES (?, ?, ?, ?)'
+    ).run(name, description ?? null, sort_order, is_public ? 1 : 0);
 
     return db.prepare('SELECT * FROM groups WHERE id = ?').get(info.lastInsertRowid);
   });
@@ -44,14 +44,14 @@ module.exports = async function groupRoutes(app) {
     const result = GroupSchema.safeParse(req.body);
     if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message ? `${result.error.issues[0].path.join('.') || 'request'}: ${result.error.issues[0].message}` : 'Invalid request' });
 
-    const { name, description, sort_order } = result.data;
+    const { name, description, sort_order, is_public } = result.data;
     const db = getDb();
     const existing = db.prepare('SELECT id FROM groups WHERE id = ?').get(id);
     if (!existing) return reply.status(404).send({ error: 'Not found' });
 
     db.prepare(
-      'UPDATE groups SET name = ?, description = ?, sort_order = ? WHERE id = ?'
-    ).run(name, description ?? null, sort_order, id);
+      'UPDATE groups SET name = ?, description = ?, sort_order = ?, is_public = ? WHERE id = ?'
+    ).run(name, description ?? null, sort_order, is_public ? 1 : 0, id);
 
     return db.prepare('SELECT * FROM groups WHERE id = ?').get(id);
   });

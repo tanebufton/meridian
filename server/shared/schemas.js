@@ -3,10 +3,13 @@
 const { z } = require('zod');
 const { validateHostFor, validateChannelUrl } = require('./hosts');
 
+const boolish = z.union([z.boolean(), z.number().int().min(0).max(1)]);
+
 const GroupSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional().nullable(),
   sort_order: z.number().int().default(0),
+  is_public: boolish.default(1), // 0 = hidden from the public dashboard and API
 });
 
 const PROBE_TYPES = ['icmp', 'icmp6', 'dns', 'tcp', 'http'];
@@ -20,6 +23,7 @@ const TargetSchema = z.object({
   packet_count: z.number().int().min(1).max(100).default(10),
   enabled: z.union([z.boolean(), z.number().int().min(0).max(1)]).default(1),
   notes: z.string().max(500).optional().nullable(),
+  is_public: boolish.default(1),
 }).superRefine((t, ctx) => {
   // The host is validated per probe type so it can never be parsed as a command-line
   // option by ping/traceroute, and tcp/http targets must be well-formed
@@ -72,19 +76,24 @@ const SettingsSchema = z.object({
   alert_after_failures: z.number().int().min(1).max(20).optional(),
   recover_after_successes: z.number().int().min(1).max(20).optional(),
   renotify_minutes: z.number().int().min(0).max(10080).optional(),
+  traceroute_method: z.enum(['auto', 'icmp', 'tcp', 'udp']).optional(),
+  route_confirm_runs: z.number().int().min(1).max(5).optional(),
   banner_enabled: z.boolean().optional(),
   banner_text: z.string().max(500).optional().nullable(),
   banner_type: z.enum(['info', 'warning', 'maintenance']).optional(),
   public_base_url: z.string().url().max(255).optional().nullable(),
 });
 
-const CHANNEL_TYPES = ['webhook', 'slack', 'discord', 'ntfy', 'telegram'];
+const CHANNEL_TYPES = ['webhook', 'slack', 'discord', 'teams', 'ntfy', 'gotify', 'pushover', 'pagerduty', 'opsgenie', 'telegram'];
 
 const NotificationChannelSchema = z.object({
   name: z.string().trim().min(1).max(100),
   type: z.enum(CHANNEL_TYPES),
   url: z.string().trim().min(1).max(1000),
   enabled: z.union([z.boolean(), z.number().int().min(0).max(1)]).default(1),
+  // Limit a channel to some groups (e.g. page only for core infrastructure). null/empty = all groups.
+  group_ids: z.array(z.number().int().positive()).max(500).nullable().optional(),
+  send_recovery: z.union([z.boolean(), z.number().int().min(0).max(1)]).default(1),
 }).superRefine((c, ctx) => {
   const problem = validateChannelUrl(c.type, c.url);
   if (problem) ctx.addIssue({ code: 'custom', path: ['url'], message: problem });

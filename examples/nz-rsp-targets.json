@@ -1,0 +1,541 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "name": "NZ - Domestic",
+      "description": "Hosts inside New Zealand networks: the paths your customers actually take domestically",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[NZ] SamKnows - Auckland",
+          "host": "n1-auckland-nz.samknows.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "NZ national broadband measurement server (REANNZ), Auckland"
+        },
+        {
+          "name": "[NZ] SamKnows - Wellington",
+          "host": "n1-wellington-nz.samknows.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "NZ national broadband measurement server (REANNZ), Wellington"
+        },
+        {
+          "name": "[NZ] SamKnows - Christchurch",
+          "host": "n1-christchurch-nz.samknows.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "NZ national broadband measurement server (REANNZ), Christchurch — tests South Island routing"
+        },
+        {
+          "name": "[NZ] Spark - Christchurch",
+          "host": "speedtest-christchurch.spark.co.nz",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Spark speedtest server, Christchurch"
+        },
+        {
+          "name": "[NZ] SiteHost - NZ hosting",
+          "host": "www.sitehost.nz",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "NZ-hosted (AS45179)"
+        },
+        {
+          "name": "[NZ] Catalyst Cloud - Porirua",
+          "host": "api.nz-por-1.catalystcloud.io",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "NZ cloud region (AS24226)"
+        },
+        {
+          "name": "[NZ] REANNZ mirror - Auckland",
+          "host": "mirror.fsmg.org.nz",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Research & education network mirror (AS38022)"
+        },
+        {
+          "name": "[NZ] NZ Herald",
+          "host": "www.nzherald.co.nz",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Served from inside an NZ carrier network (AS55850)"
+        }
+      ]
+    },
+    {
+      "name": "NZ - Popular Services",
+      "description": "What customers actually use. These are mostly CDN-fronted (Cloudflare/Akamai/Fastly/AWS), so they show the experience of reaching the local CDN edge — not NZ routing. Compare with NZ - Domestic.",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "Trade Me",
+          "host": "www.trademe.co.nz",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "CDN-fronted"
+        },
+        {
+          "name": "Stuff",
+          "host": "www.stuff.co.nz",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "CDN-fronted"
+        },
+        {
+          "name": "RNZ",
+          "host": "www.rnz.co.nz",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "CDN-fronted"
+        },
+        {
+          "name": "TVNZ",
+          "host": "www.tvnz.co.nz",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "CDN-fronted"
+        },
+        {
+          "name": "ANZ NZ",
+          "host": "www.anz.co.nz",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "CDN-fronted"
+        },
+        {
+          "name": "ASB",
+          "host": "www.asb.co.nz",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "CDN-fronted"
+        },
+        {
+          "name": "Netflix",
+          "host": "www.netflix.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Open Connect cache"
+        },
+        {
+          "name": "Disney+",
+          "host": "www.disneyplus.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "CDN-fronted"
+        },
+        {
+          "name": "Microsoft 365",
+          "host": "outlook.office365.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Served from Sydney — a trans-Tasman path"
+        },
+        {
+          "name": "Xero",
+          "host": "www.xero.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "CDN-fronted"
+        },
+        {
+          "name": "Zoom",
+          "host": "zoom.us",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "CDN-fronted"
+        },
+        {
+          "name": "Steam",
+          "host": "store.steampowered.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "CDN-fronted"
+        }
+      ]
+    },
+    {
+      "name": "DNS Infrastructure",
+      "description": "Root and .nz authoritative servers. Anycast: low latency means a local instance is answering.",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[NZ] .nz DNS - ns1",
+          "host": "ns1.dns.net.nz",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "InternetNZ registry (AS45809)"
+        },
+        {
+          "name": "[NZ] .nz DNS - ns2",
+          "host": "ns2.dns.net.nz",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Anycast"
+        },
+        {
+          "name": "[NZ] .nz DNS - ns3",
+          "host": "ns3.dns.net.nz",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Anycast"
+        },
+        {
+          "name": "[NZ] .nz DNS - ns4",
+          "host": "ns4.dns.net.nz",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Anycast"
+        },
+        {
+          "name": "Root server F",
+          "host": "f.root-servers.net",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Anycast — ISC"
+        },
+        {
+          "name": "Root server K",
+          "host": "k.root-servers.net",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Anycast — RIPE NCC"
+        },
+        {
+          "name": "Root server L",
+          "host": "l.root-servers.net",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Anycast — ICANN"
+        },
+        {
+          "name": "Root server J",
+          "host": "j.root-servers.net",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Anycast — Verisign (answers from Sydney)"
+        }
+      ]
+    },
+    {
+      "name": "Pacific Islands",
+      "description": "In-region hosts on local networks (verified by ASN and latency). Useful for the Pacific cable systems out of NZ.",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[FJ] Connect - Fiji",
+          "host": "www.connect.com.fj",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Telecom Fiji (AS4638)"
+        },
+        {
+          "name": "[PG] Datec - Papua New Guinea",
+          "host": "www.datec.com.pg",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS55792"
+        },
+        {
+          "name": "[VU] Telecom Vanuatu",
+          "host": "www.tvl.vu",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS9249"
+        },
+        {
+          "name": "[VU] Government of Vanuatu",
+          "host": "www.governmentofvanuatu.gov.vu",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS132228"
+        },
+        {
+          "name": "[NC] OPT - New Caledonia",
+          "host": "www.opt.nc",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS18200"
+        }
+      ]
+    },
+    {
+      "name": "Asia - South-East",
+      "description": "South-East Asia",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[ID] CBN - Indonesia",
+          "host": "www.cbn.id",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS132644"
+        },
+        {
+          "name": "[VN] VNPT - Vietnam",
+          "host": "www.vnpt.vn",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS135905"
+        },
+        {
+          "name": "[VN] Viettel - Vietnam",
+          "host": "viettel.vn",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS7552"
+        }
+      ]
+    },
+    {
+      "name": "Asia - Northeast",
+      "description": "North-East Asia",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[TW] Chunghwa - Taiwan",
+          "host": "www.cht.com.tw",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS131660"
+        }
+      ]
+    },
+    {
+      "name": "Asia - South",
+      "description": "South Asia",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[IN] Vultr - Mumbai",
+          "host": "bom-in-ping.vultr.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "In-datacentre ping host"
+        },
+        {
+          "name": "[IN] Vultr - Delhi",
+          "host": "del-in-ping.vultr.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "In-datacentre ping host"
+        }
+      ]
+    },
+    {
+      "name": "Africa",
+      "description": "Africa — few reliable in-country hosts exist; these are real datacentre endpoints",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[ZA] Vultr - Johannesburg",
+          "host": "jnb-za-ping.vultr.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "In-datacentre ping host"
+        },
+        {
+          "name": "[MU] AFRINIC - Mauritius",
+          "host": "www.afrinic.net",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS33764"
+        }
+      ]
+    },
+    {
+      "name": "South America",
+      "description": "South America",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[BR] Vultr - São Paulo",
+          "host": "sao-br-ping.vultr.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "In-datacentre ping host"
+        },
+        {
+          "name": "[CL] Vultr - Santiago",
+          "host": "scl-cl-ping.vultr.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "In-datacentre ping host"
+        },
+        {
+          "name": "[BR] NIC.br - Brazil",
+          "host": "www.nic.br",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS22548"
+        }
+      ]
+    },
+    {
+      "name": "North America - NE",
+      "description": "",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[CA/ON] Vultr - Toronto",
+          "host": "tor-ca-ping.vultr.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "In-datacentre ping host"
+        }
+      ]
+    },
+    {
+      "name": "North America - SW",
+      "description": "",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[US/CA] Vultr - Los Angeles",
+          "host": "lax-ca-us-ping.vultr.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "In-datacentre ping host"
+        }
+      ]
+    },
+    {
+      "name": "North America - S",
+      "description": "",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[MX] Vultr - Mexico City",
+          "host": "mex-mx-ping.vultr.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "In-datacentre ping host"
+        }
+      ]
+    },
+    {
+      "name": "Oceania",
+      "description": "",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[AU] Vultr - Melbourne",
+          "host": "mel-au-ping.vultr.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "In-datacentre ping host"
+        }
+      ]
+    }
+  ]
+}

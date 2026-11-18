@@ -1,25 +1,32 @@
 import { useEffect, useState } from 'react';
-import { useSettings, useNotificationChannels, useMutate, apiFetch } from '../../hooks/useApi';
+import { useSettings, useNotificationChannels, useGroups, useMutate, apiFetch } from '../../hooks/useApi';
 import Toggle from '../../components/Toggle';
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
 import { useConfirm } from '../../components/ConfirmDialog';
 
-const CHANNEL_TYPES = ['webhook', 'slack', 'discord', 'ntfy', 'telegram'];
-const CHANNEL_PLACEHOLDERS = {
-  webhook: 'https://your-service.example.com/webhook',
-  slack: 'https://hooks.slack.com/services/T.../B.../...',
-  discord: 'https://discord.com/api/webhooks/ID/TOKEN',
-  ntfy: 'https://ntfy.sh/your-topic',
-  telegram: 'tgram://BOTTOKEN/CHATID',
+const CHANNELS = {
+  pagerduty: { label: 'PagerDuty', ph: 'pagerduty://INTEGRATION_KEY', help: 'Use an Events API v2 integration key. Pages on-call and auto-resolves when the target recovers. Exempt from alert-flood batching.' },
+  opsgenie: { label: 'Opsgenie', ph: 'opsgenie://API_KEY   (EU: opsgenie://API_KEY?region=eu)', help: 'Creates an alert per outage and closes it on recovery. Exempt from alert-flood batching.' },
+  pushover: { label: 'Pushover', ph: 'pushover://USER_KEY@APP_TOKEN', help: 'Outages arrive as high-priority pushes that bypass quiet hours. Optional: ?device=phone&sound=siren' },
+  ntfy: { label: 'ntfy', ph: 'https://ntfy.sh/your-topic', help: 'For a protected topic add ?token=tk_… (access token) or use https://user:pass@host/topic.' },
+  slack: { label: 'Slack', ph: 'https://hooks.slack.com/services/T.../B.../...' },
+  discord: { label: 'Discord', ph: 'https://discord.com/api/webhooks/ID/TOKEN' },
+  teams: { label: 'Microsoft Teams', ph: 'https://…webhook.office.com/… or a Workflows webhook URL' },
+  gotify: { label: 'Gotify', ph: 'https://gotify.example.com/message?token=APP_TOKEN' },
+  telegram: { label: 'Telegram', ph: 'tgram://BOTTOKEN/CHATID', help: 'Get a bot token from @BotFather and your chat ID from @userinfobot.' },
+  webhook: { label: 'Generic webhook', ph: 'https://your-service.example.com/webhook', help: 'Receives JSON with event, incident_id, target, host, group, status, duration_seconds, cause.' },
 };
+const PAGING = new Set(['pagerduty', 'opsgenie']);
 
-function ChannelModal({ channel, onSave, onClose }) {
+function ChannelModal({ channel, groups, onSave, onClose }) {
   const [form, setForm] = useState({
     name: channel?.name || '',
     type: channel?.type || 'webhook',
     url: channel?.url || '',
     enabled: channel != null ? !!channel.enabled : true,
+    group_ids: channel?.group_ids || [],
+    send_recovery: channel ? !!channel.send_recovery : true,
   });
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState(null);
@@ -31,7 +38,7 @@ function ChannelModal({ channel, onSave, onClose }) {
     try {
       await mut.mutateAsync({
         url: channel ? `/api/admin/notifications/${channel.id}` : '/api/admin/notifications',
-        method: channel ? 'PUT' : 'POST', body: form,
+        method: channel ? 'PUT' : 'POST', body: { ...form, group_ids: form.group_ids.length ? form.group_ids : null },
       });
       onSave();
     } catch (err) { setResult({ ok: false, msg: err.message }); }
@@ -57,14 +64,25 @@ function ChannelModal({ channel, onSave, onClose }) {
           <div className="field">
             <label>Type</label>
             <select value={form.type} onChange={(e) => set('type', e.target.value)}>
-              {CHANNEL_TYPES.map((t) => <option key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</option>)}
+              {Object.entries(CHANNELS).map(([t, c]) => <option key={t} value={t}>{c.label}</option>)}
             </select>
           </div>
           <div className="field">
             <label>URL</label>
-            <input required className="mono" value={form.url} onChange={(e) => set('url', e.target.value)} placeholder={CHANNEL_PLACEHOLDERS[form.type]} />
-            {form.type === 'telegram' && <div className="muted help">Get a bot token from @BotFather and your chat ID from @userinfobot.</div>}
+            <input required className="mono" value={form.url} onChange={(e) => set('url', e.target.value)} placeholder={CHANNELS[form.type].ph} />
+            {CHANNELS[form.type].help && <div className="muted help">{CHANNELS[form.type].help}</div>}
           </div>
+          <div className="field">
+            <label>Only alert for these groups <span style={{ fontWeight: 400 }}>— leave empty for all</span></label>
+            <div className="chips">
+              {groups.map((g) => {
+                const on = form.group_ids.includes(g.id);
+                return <button type="button" key={g.id} className={`chip${on ? ' on' : ''}`} onClick={() => set('group_ids', on ? form.group_ids.filter((x) => x !== g.id) : [...form.group_ids, g.id])}>{g.name}</button>;
+              })}
+            </div>
+            <div className="muted help">e.g. page PagerDuty only for core infrastructure and send everything else to chat.</div>
+          </div>
+          <div className="field row"><Toggle checked={form.send_recovery} onChange={(v) => set('send_recovery', v)} /><span style={{ fontSize: 13 }}>Also send "recovered" messages</span></div>
           <div className="field row"><Toggle checked={form.enabled} onChange={(v) => set('enabled', v)} /><span style={{ fontSize: 13 }}>Enabled</span></div>
           {result && <div className={result.ok ? 'ok-msg' : 'error-msg'} role="status">{result.msg}</div>}
           <div className="modal-actions">
@@ -81,6 +99,7 @@ function ChannelModal({ channel, onSave, onClose }) {
 export default function Alerting() {
   const settings = useSettings();
   const channels = useNotificationChannels();
+  const groups = useGroups();
   const { toasts, toast } = useToast();
   const ask = useConfirm();
   const [form, setForm] = useState(null);
@@ -163,18 +182,27 @@ export default function Alerting() {
           <button onClick={() => setEditing({})}>+ Add channel</button>
         </div>
         <p className="muted help" style={{ marginBottom: 14 }}>
-          Slack, Discord, ntfy, Telegram or any webhook. If many targets fail at once (a mass outage), alerts are batched into one summary message instead of flooding the channel.
+          PagerDuty, Opsgenie, Pushover, ntfy, Slack, Discord, Teams, Gotify, Telegram or any webhook. Failed deliveries are retried. If many targets fail at once, chat channels get one batched summary, while paging channels (PagerDuty, Opsgenie) still page for every outage.
         </p>
         {channels.data?.length > 0 ? (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Name</th><th>Type</th><th>URL</th><th>On</th><th></th></tr></thead>
+              <thead><tr><th>Name</th><th>Type</th><th>Scope</th><th>Last delivery</th><th>On</th><th></th></tr></thead>
               <tbody>
                 {channels.data.map((ch) => (
                   <tr key={ch.id}>
                     <td style={{ fontWeight: 500 }}>{ch.name}</td>
-                    <td style={{ fontSize: 12 }}>{ch.type}</td>
-                    <td className="mono muted ellipsis" style={{ maxWidth: 260 }}>{ch.url.replace(/(\/\/[^/]*\/).{12,}/, '$1…')}</td>
+                    <td style={{ fontSize: 12 }}>{CHANNELS[ch.type]?.label || ch.type}{PAGING.has(ch.type) && <span className="badge badge-ack" style={{ marginLeft: 6 }}>pages</span>}</td>
+                    <td className="muted" style={{ fontSize: 12 }}>
+                      {ch.group_ids?.length ? ch.group_ids.map((id) => groups.data?.find((g) => g.id === id)?.name || `#${id}`).join(', ') : 'All groups'}
+                      {!ch.send_recovery && ' · no recoveries'}
+                    </td>
+                    <td style={{ fontSize: 12 }}>
+                      {ch.last_error
+                        ? <span style={{ color: 'var(--danger)' }} title={ch.last_error}>✕ failed {new Date(ch.last_error_at * 1000).toLocaleString()}<div className="muted" style={{ fontSize: 11, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.last_error}</div></span>
+                        : ch.last_ok_at ? <span style={{ color: 'var(--success)' }}>✓ {new Date(ch.last_ok_at * 1000).toLocaleString()}</span>
+                        : <span className="muted">not used yet</span>}
+                    </td>
                     <td><Toggle checked={!!ch.enabled} onChange={() => toggle(ch)} /></td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
@@ -203,6 +231,7 @@ export default function Alerting() {
       {editing && (
         <ChannelModal
           channel={editing.id ? editing : null}
+          groups={groups.data || []}
           onSave={() => { setEditing(null); toast('Channel saved'); }}
           onClose={() => setEditing(null)}
         />

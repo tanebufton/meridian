@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useMutate, apiFetch } from '../../hooks/useApi';
+import { useMutate, useSettings, apiFetch } from '../../hooks/useApi';
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -50,6 +50,43 @@ function ImportModal({ data, onDone, onClose }) {
   );
 }
 
+function TraceSettings({ toast }) {
+  const settings = useSettings();
+  const mut = useMutate(['admin-settings']);
+  const [method, setMethod] = useState(null);
+  const [confirmRuns, setConfirmRuns] = useState(null);
+  if (!settings.data) return null;
+  const m = method ?? settings.data.traceroute_method ?? 'auto';
+  const c = confirmRuns ?? settings.data.route_confirm_runs ?? 2;
+  async function save(e) {
+    e.preventDefault();
+    try { await mut.mutateAsync({ url: '/api/admin/settings', method: 'PUT', body: { traceroute_method: m, route_confirm_runs: Number(c) } }); toast('Traceroute settings saved'); }
+    catch (err) { toast(err.message, 'error'); }
+  }
+  return (
+    <form onSubmit={save}>
+      <div className="grid-2" style={{ maxWidth: 640 }}>
+        <div className="field">
+          <label>Probe method</label>
+          <select value={m} onChange={(e) => setMethod(e.target.value)}>
+            <option value="auto">Automatic (ICMP, then TCP, then UDP)</option>
+            <option value="icmp">ICMP only</option>
+            <option value="tcp">TCP :443 only</option>
+            <option value="udp">UDP only (traceroute default)</option>
+          </select>
+          <div className="muted help">UDP, the traceroute default, is dropped by many networks and reached only 3 of 10 test destinations; ICMP reached all 10.</div>
+        </div>
+        <div className="field">
+          <label>Confirm a route change after N runs</label>
+          <input type="number" min={1} max={5} value={c} onChange={(e) => setConfirmRuns(e.target.value)} />
+          <div className="muted help">A changed AS path is only recorded if it's seen on this many consecutive runs (re-checked every ~15 min), so one-off blips are ignored.</div>
+        </div>
+      </div>
+      <button type="submit" disabled={mut.isPending}>Save</button>
+    </form>
+  );
+}
+
 export default function Data() {
   const { toasts, toast } = useToast();
   const fileRef = useRef(null);
@@ -87,7 +124,8 @@ export default function Data() {
 
       <div className="card section">
         <h2 className="card-title">Traceroute</h2>
-        <p className="muted help" style={{ marginBottom: 14 }}>Run traceroute for every target that has no path data yet (or an empty one). Four at a time; results appear within a few minutes.</p>
+        <TraceSettings toast={toast} />
+        <p className="muted help" style={{ margin: '18px 0 14px' }}>Run traceroute for every target that has no path data yet (or an empty one). Four at a time; results appear within a few minutes.</p>
         <button className="btn-ghost" disabled={backfill.isPending} onClick={async () => {
           try { const r = await backfill.mutateAsync({ url: '/api/admin/traceroute/backfill', method: 'POST', body: {} }); toast(r.message || 'Started'); }
           catch (err) { toast(err.message, 'error'); }

@@ -8,7 +8,7 @@ const { maintenanceMap } = require('./maintenance');
  * maintenance. One query shape shared by /metrics, badges and the summary endpoint so
  * they can never disagree about what "down" means.
  */
-function getTargetStates(db, now = Math.floor(Date.now() / 1000), onlyTargetId = null) {
+function getTargetStates(db, now = Math.floor(Date.now() / 1000), onlyTargetId = null, { publicOnly = false } = {}) {
   const rows = db.prepare(
     `SELECT t.id, t.group_id, t.name, t.host, t.probe_type, t.interval_seconds, t.notes,
             g.name AS group_name,
@@ -25,7 +25,7 @@ function getTargetStates(db, now = Math.floor(Date.now() / 1000), onlyTargetId =
      )
      LEFT JOIN target_uptime tu ON tu.target_id = t.id
      LEFT JOIN incidents inc ON inc.target_id = t.id AND inc.ended_at IS NULL
-     WHERE t.enabled = 1 ${onlyTargetId != null ? 'AND t.id = ?' : ''}
+     WHERE t.enabled = 1 ${publicOnly ? 'AND t.is_public = 1 AND g.is_public = 1' : ''} ${onlyTargetId != null ? 'AND t.id = ?' : ''}
      ORDER BY g.sort_order ASC, g.id ASC, t.id ASC`
   ).all(...(onlyTargetId != null ? [onlyTargetId] : []));
 

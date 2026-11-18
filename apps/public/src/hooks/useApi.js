@@ -95,3 +95,11 @@ export function useAvailability(id, days = 90) {
     staleTime: 300_000,
   });
 }
+
+export function useTargetEvents(id, range) {
+  return useQuery({
+    queryKey: ['target-events', id, range],
+    queryFn: () => apiFetch(`/api/v1/targets/${id}/events?range=${range}`),
+    refetchInterval: 60_000,
+  });
+}

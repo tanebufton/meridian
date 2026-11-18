@@ -236,3 +236,54 @@ test('audit log records admin actions without request bodies', async () => {
   assert.ok(actions.some((a) => a.startsWith('POST /targets')));
   assert.ok(!JSON.stringify(log.body).includes('second-password-456'));
 });
+
+test('notification channels: new types validated, group filter + recovery switch stored, status fields present', async () => {
+  const bad = (type, url) => alice.post('/api/admin/notifications', { name: 'x', type, url });
+  assert.equal((await bad('pagerduty', 'https://events.pagerduty.com')).status, 400);
+  assert.equal((await bad('pushover', 'pushover://short@short')).status, 400);
+  assert.equal((await bad('opsgenie', 'opsgenie://abc')).status, 400);
+  assert.equal((await bad('gotify', 'file:///etc/passwd')).status, 400);
+  const ok = await alice.post('/api/admin/notifications', {
+    name: 'Pager', type: 'pagerduty', url: 'pagerduty://R0UTINGKEY0123456789abcdef012345', group_ids: [1], send_recovery: false,
+  });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.deepEqual(ok.body.group_ids, [1]);
+  assert.equal(ok.body.send_recovery, 0);
+  const list = (await alice.get('/api/admin/notifications')).body;
+  const ch = list.find((c) => c.name === 'Pager');
+  assert.deepEqual(ch.group_ids, [1]);
+  assert.ok('last_ok_at' in ch && 'last_error' in ch);
+  const upd = await alice.put(`/api/admin/notifications/${ch.id}`, { name: 'Pager', type: 'pagerduty', url: ch.url, group_ids: [], send_recovery: true });
+  assert.equal(upd.body.group_ids, null, 'empty filter means all groups');
+});
+
+test('visibility: groups and targets can be made private and the flag round-trips (incl. export/import)', async () => {
+  const g = await alice.post('/api/admin/groups', { name: 'Tailnet', is_public: 0 });
+  assert.equal(g.status, 200);
+  assert.equal(g.body.is_public, 0);
+  const t = await alice.post('/api/admin/targets', { group_id: g.body.id, name: 'Internal', host: '10.1.1.1', probe_type: 'icmp', is_public: 0 });
+  assert.equal(t.status, 200);
+  const list = (await alice.get('/api/admin/targets')).body.find((x) => x.name === 'Internal');
+  assert.equal(list.is_public, 0); assert.equal(list.group_is_public, 0);
+  assert.equal((await alice.get('/api/admin/groups')).body.find((x) => x.name === 'Tailnet').is_public, 0);
+  const exp = (await alice.get('/api/admin/config/export')).body;
+  assert.equal(exp.groups.find((x) => x.name === 'Tailnet').public, false);
+  assert.equal((await alice.put(`/api/admin/groups/${g.body.id}`, { name: 'Tailnet', is_public: 1 })).body.is_public, 1);
+});
+
+test('traceroute settings are validated', async () => {
+  assert.equal((await alice.put('/api/admin/settings', { traceroute_method: 'icmp', route_confirm_runs: 3 })).status, 200);
+  assert.equal((await alice.put('/api/admin/settings', { traceroute_method: 'carrier-pigeon' })).status, 400);
+  assert.equal((await alice.put('/api/admin/settings', { route_confirm_runs: 0 })).status, 400);
+});
+
+test('the bundled NZ RSP example file is a valid import and creates the expected groups', async () => {
+  const file = JSON.parse(fs.readFileSync(path.join(root, 'examples/nz-rsp-targets.json'), 'utf8'));
+  const res = await alice.post('/api/admin/config/import', file);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.ok(res.body.imported.targets >= 40);
+  const groups = (await alice.get('/api/admin/groups')).body.map((g) => g.name);
+  for (const n of ['NZ - Domestic', 'Pacific Islands', 'DNS Infrastructure', 'Africa', 'South America']) assert.ok(groups.includes(n), n);
+  const again = await alice.post('/api/admin/config/import', file);
+  assert.equal(again.body.imported.targets, 0, 'importing twice adds nothing');
+});

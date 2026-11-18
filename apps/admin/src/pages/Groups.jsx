@@ -3,8 +3,9 @@ import { useGroups, useMutate } from '../hooks/useApi';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 import { useConfirm } from '../components/ConfirmDialog';
+import Toggle from '../components/Toggle';
 
-const EMPTY = { name: '', description: '', sort_order: 0 };
+const EMPTY = { name: '', description: '', sort_order: 0, is_public: 1 };
 
 function GroupModal({ group, onSave, onClose }) {
   const [form, setForm] = useState(group || EMPTY);
@@ -33,6 +34,11 @@ function GroupModal({ group, onSave, onClose }) {
           {error && <div className="error-msg" role="alert">{error}</div>}
           <div className="field"><label>Name</label><input value={form.name} onChange={(e) => set('name', e.target.value)} required /></div>
           <div className="field"><label>Description</label><input value={form.description || ''} onChange={(e) => set('description', e.target.value)} /></div>
+          <div className="field row">
+            <Toggle checked={!!form.is_public} onChange={(v) => set('is_public', v ? 1 : 0)} />
+            <span style={{ fontSize: 13 }}>Show on the public dashboard</span>
+          </div>
+          {!form.is_public && <div className="muted help" style={{ marginTop: -6, marginBottom: 12 }}>Private groups are still probed and alert you, but their names, hosts and results never appear on the public site, API, feed or badges.</div>}
           <div className="modal-actions">
             <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
             <button type="submit" disabled={mut.isPending}>{mut.isPending ? 'Saving…' : 'Save'}</button>
@@ -140,7 +146,7 @@ export default function Groups() {
                 >
                   ⠿
                 </td>
-                <td>{g.name}</td>
+                <td>{g.name}{!g.is_public && <span className="badge badge-unknown" style={{ marginLeft: 8 }} title="Not shown on the public dashboard">private</span>}</td>
                 <td style={{ color: 'var(--text-muted)' }}>{g.description || '—'}</td>
                 <td>{g.target_count}</td>
                 <td>

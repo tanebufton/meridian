@@ -308,7 +308,7 @@ export default function Targets() {
                 <td>
                   <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleSelect(t.id)} />
                 </td>
-                <td>{t.name}</td>
+                <td>{t.name}{(!t.is_public || !t.group_is_public) && <span className="badge badge-unknown" style={{ marginLeft: 8 }} title={!t.group_is_public ? 'Its group is private' : 'Hidden from the public dashboard'}>private</span>}</td>
                 <td style={{ color: 'var(--text-muted)' }}>{t.group_name}</td>
                 <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{t.host}</td>
                 <td style={{ textTransform: 'uppercase', fontSize: 11 }}>{t.probe_type}</td>

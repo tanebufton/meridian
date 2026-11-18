@@ -77,4 +77,22 @@ function maintenanceMap(db, targets, now = Math.floor(Date.now() / 1000)) {
   return map;
 }
 
-module.exports = { describe, covers, activeFor, activeWindows, maintenanceMap, invalidate };
+/** Every occurrence of a window that overlaps [from, to] (a repeating window can occur many times). */
+function occurrences(w, from, to) {
+  const dur = w.ends_at - w.starts_at;
+  if (dur <= 0) return [];
+  const period = PERIOD[w.repeat];
+  if (!period) return w.ends_at > from && w.starts_at < to ? [{ start: w.starts_at, end: w.ends_at }] : [];
+  const len = Math.min(dur, period);
+  const out = [];
+  let k = Math.max(0, Math.floor((from - w.starts_at - len) / period));
+  for (; ; k++) {
+    const start = w.starts_at + k * period;
+    if (start >= to) break;
+    if (start + len > from) out.push({ start, end: start + len });
+    if (out.length > 500) break;
+  }
+  return out;
+}
+
+module.exports = { occurrences, describe, covers, allWindows, activeFor, activeWindows, maintenanceMap, invalidate };

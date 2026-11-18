@@ -11,6 +11,7 @@ const { recalcUptime } = require('./uptime');
 const { rollup5Min, rollup1Hour, runRetention, backfillAggregates } = require('./rollup');
 const { runTracerouteBackfill } = require('./traceroute-backfill');
 const { getStatus } = require('../shared/constants');
+const { probePercentiles } = require('../shared/stats');
 const { loadSettings } = require('../shared/settings');
 const maintenance = require('../shared/maintenance');
 const incidents = require('./incidents');
@@ -48,7 +49,7 @@ let inFlightCount = 0;
 
 // ── Probe execution ─────────────────────────────────────────────────────────
 
-const LATENCY_COLS = `(target_id, latency_min, latency_avg, latency_max, latency_mdev, packet_loss, rtts_json, resolved_ip, error)`;
+const LATENCY_COLS = `(target_id, latency_min, latency_avg, latency_max, latency_mdev, latency_p50, latency_p95, packet_loss, rtts_json, resolved_ip, error)`;
 
 async function execute(target) {
   switch (target.probe_type) {
@@ -72,8 +73,9 @@ async function runProbe(entry) {
     const { kind, result } = await execute(target);
 
     if (kind === 'latency') {
-      db.prepare(`INSERT INTO probe_results ${LATENCY_COLS} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        target.id, result.latency_min, result.latency_avg, result.latency_max, result.latency_mdev,
+      const { p50, p95 } = probePercentiles(result.rtts);
+      db.prepare(`INSERT INTO probe_results ${LATENCY_COLS} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        target.id, result.latency_min, result.latency_avg, result.latency_max, result.latency_mdev, p50, p95,
         result.packet_loss, JSON.stringify(result.rtts), result.resolved_ip ?? null, result.error,
       );
     } else {
@@ -94,6 +96,7 @@ async function runProbe(entry) {
       fireStatusChange({
         kind: ev.kind,
         targetId: target.id,
+        groupId: target.group_id,
         name: target.name,
         host: target.host,
         groupName: target.group_name,
@@ -225,6 +228,8 @@ function startRollupJobs() {
   catch (err) { logger.error({ err }, 'Aggregate catch-up failed'); }
 
   every(5 * 60 * 1000, '5-min rollup', rollup5Min);
+  // Suspected route changes are re-checked within ~15 minutes rather than waiting for tomorrow's run
+  every(5 * 60 * 1000, 'route-change confirmation', () => refreshStaleTraceroutes());
   every(60 * 60 * 1000, '1-hour rollup', rollup1Hour);
 
   function scheduleNightly() {

@@ -15,7 +15,7 @@ module.exports = async function targetRoutes(app) {
     const db = getDb();
     const targets = db.prepare(
       `SELECT t.id, t.group_id, t.name, t.host, t.probe_type, t.interval_seconds,
-              t.packet_count, t.enabled, t.notes, t.created_at, g.name AS group_name,
+              t.packet_count, t.enabled, t.notes, t.created_at, t.is_public, g.is_public AS group_is_public, g.name AS group_name,
               pr.latency_avg, pr.packet_loss, pr.dns_success, pr.error, pr.timestamp AS last_checked
        FROM targets t
        JOIN groups g ON g.id = t.group_id
@@ -50,9 +50,9 @@ module.exports = async function targetRoutes(app) {
     if (!group) return reply.status(400).send({ error: 'Group not found' });
 
     const info = db.prepare(
-      `INSERT INTO targets (group_id, name, host, probe_type, interval_seconds, packet_count, enabled, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(d.group_id, d.name, d.host, d.probe_type, d.interval_seconds, d.packet_count, d.enabled ? 1 : 0, d.notes ?? null);
+      `INSERT INTO targets (group_id, name, host, probe_type, interval_seconds, packet_count, enabled, notes, is_public)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(d.group_id, d.name, d.host, d.probe_type, d.interval_seconds, d.packet_count, d.enabled ? 1 : 0, d.notes ?? null, d.is_public ? 1 : 0);
 
     return db.prepare('SELECT * FROM targets WHERE id = ?').get(info.lastInsertRowid);
   });
@@ -72,8 +72,8 @@ module.exports = async function targetRoutes(app) {
 
     db.prepare(
       `UPDATE targets SET group_id=?, name=?, host=?, probe_type=?, interval_seconds=?,
-       packet_count=?, enabled=?, notes=? WHERE id=?`
-    ).run(d.group_id, d.name, d.host, d.probe_type, d.interval_seconds, d.packet_count, d.enabled ? 1 : 0, d.notes ?? null, id);
+       packet_count=?, enabled=?, notes=?, is_public=? WHERE id=?`
+    ).run(d.group_id, d.name, d.host, d.probe_type, d.interval_seconds, d.packet_count, d.enabled ? 1 : 0, d.notes ?? null, d.is_public ? 1 : 0, id);
 
     return db.prepare('SELECT * FROM targets WHERE id = ?').get(id);
   });
@@ -130,13 +130,13 @@ module.exports = async function targetRoutes(app) {
 
     const db = getDb();
     const insert = db.prepare(
-      `INSERT INTO targets (group_id, name, host, probe_type, interval_seconds, packet_count, enabled, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO targets (group_id, name, host, probe_type, interval_seconds, packet_count, enabled, notes, is_public)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const insertMany = db.transaction((rows) => {
       const ids = [];
       for (const t of rows) {
-        const info = insert.run(t.group_id, t.name, t.host, t.probe_type, t.interval_seconds, t.packet_count, t.enabled ? 1 : 0, t.notes ?? null);
+        const info = insert.run(t.group_id, t.name, t.host, t.probe_type, t.interval_seconds, t.packet_count, t.enabled ? 1 : 0, t.notes ?? null, t.is_public ? 1 : 0);
         ids.push(info.lastInsertRowid);
       }
       return ids;

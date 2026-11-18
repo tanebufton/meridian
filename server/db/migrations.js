@@ -92,6 +92,53 @@ const migrations = [
       addColumn(db, 'admin_users', 'recovery_codes', 'TEXT');
     },
   },
+  {
+    version: 5,
+    name: 'notification channels: more types, per-channel filters, delivery status',
+    up(db) {
+      const row = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='notification_channels'`).get();
+      if (row && /CHECK\s*\(\s*type/i.test(row.sql)) {
+        // The old CHECK only allowed five channel types. Same safe rebuild as for targets.
+        db.pragma('foreign_keys = OFF');
+        try {
+          db.transaction(() => {
+            db.exec(`CREATE TABLE notification_channels_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL, url TEXT NOT NULL,
+              enabled INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+              groups_json TEXT, send_recovery INTEGER NOT NULL DEFAULT 1,
+              last_ok_at INTEGER, last_error TEXT, last_error_at INTEGER)`);
+            db.exec(`INSERT INTO notification_channels_new (id, name, type, url, enabled, created_at)
+                     SELECT id, name, type, url, enabled, created_at FROM notification_channels`);
+            db.exec('DROP TABLE notification_channels');
+            db.exec('ALTER TABLE notification_channels_new RENAME TO notification_channels');
+          })();
+        } finally { db.pragma('foreign_keys = ON'); }
+      }
+      addColumn(db, 'notification_channels', 'groups_json', 'TEXT');
+      addColumn(db, 'notification_channels', 'send_recovery', 'INTEGER NOT NULL DEFAULT 1');
+      addColumn(db, 'notification_channels', 'last_ok_at', 'INTEGER');
+      addColumn(db, 'notification_channels', 'last_error', 'TEXT');
+      addColumn(db, 'notification_channels', 'last_error_at', 'INTEGER');
+    },
+  },
+  {
+    version: 6,
+    name: 'latency percentiles, public/private visibility, route-change tracking',
+    up(db) {
+      addColumn(db, 'probe_results', 'latency_p50', 'REAL');
+      addColumn(db, 'probe_results', 'latency_p95', 'REAL');
+      addColumn(db, 'probe_aggregates', 'latency_p50', 'REAL');
+      addColumn(db, 'probe_aggregates', 'latency_p95', 'REAL');
+      addColumn(db, 'groups', 'is_public', 'INTEGER NOT NULL DEFAULT 1');
+      addColumn(db, 'targets', 'is_public', 'INTEGER NOT NULL DEFAULT 1');
+      addColumn(db, 'traceroute_cache', 'as_path_json', 'TEXT');
+      addColumn(db, 'traceroute_cache', 'pending_json', 'TEXT');
+      addColumn(db, 'traceroute_cache', 'pending_count', 'INTEGER NOT NULL DEFAULT 0');
+      addColumn(db, 'traceroute_cache', 'method', 'TEXT');
+      addColumn(db, 'traceroute_cache', 'complete', 'INTEGER NOT NULL DEFAULT 0');
+      addColumn(db, 'traceroute_history', 'as_path_json', 'TEXT');
+    },
+  },
 ];
 
 const LATEST_VERSION = migrations[migrations.length - 1].version;
