@@ -62,6 +62,9 @@ test.before(async () => {
   db.prepare('INSERT INTO traceroute_cache (target_id, result_json, ran_at, as_path_json, method, complete) VALUES (?, ?, ?, ?, ?, 1)').run(ids.t[0], JSON.stringify(hops), now, JSON.stringify({ path: [55850, 4637, 15169] }), 'icmp');
   db.prepare('INSERT INTO traceroute_history (target_id, result_json, ran_at, as_path_json) VALUES (?, ?, ?, ?)').run(ids.t[0], JSON.stringify(hops), now - 40000, JSON.stringify({ path: [55850, 3356, 15169] }));
   db.prepare('INSERT INTO traceroute_history (target_id, result_json, ran_at, as_path_json) VALUES (?, ?, ?, ?)').run(ids.t[0], JSON.stringify(hops), now - 7000, JSON.stringify({ path: [55850, 4637, 15169] }));
+  // Completeness notice: shown for a new-engine trace that didn't reach the host, never for legacy rows (no method)
+  db.prepare('INSERT INTO traceroute_cache (target_id, result_json, ran_at, as_path_json, method, complete) VALUES (?, ?, ?, ?, ?, 0)').run(ids.t[1], JSON.stringify(hops), now, JSON.stringify({ path: [55850, 15169] }), 'icmp');
+  db.prepare('INSERT INTO traceroute_cache (target_id, result_json, ran_at) VALUES (?, ?, ?)').run(ids.t[2], JSON.stringify(hops), now - 90000);
   require('../../server/probe/rollup').backfillAggregates();
   db.close();
 
@@ -122,6 +125,20 @@ test('target page: chart overlays, AS path, route-change history and tools', asy
   assert.match(await page.textContent('body'), /Route changes/);
   await page.click('button:text-is("Fit")'); await page.click('button:text-is("Log")'); await page.click('button:text-is("Linear")');
   await page.click('summary:has-text("Share")'); await page.waitForSelector('text=Download CSV');
+  assert.deepEqual(page.errors, []);
+});
+
+test('traceroute completeness notice: only for new-engine incomplete traces, never for legacy rows', async (t) => {
+  if (!guard(t)) return;
+  const page = await newPage();
+  await page.goto(P(`/target/${ids.t[1]}`)); await page.click('text=Traceroute'); await page.waitForSelector('table');
+  assert.match(await page.textContent('body'), /destination itself didn't answer/);
+  await page.goto(P(`/target/${ids.t[2]}`)); await page.click('text=Traceroute'); await page.waitForSelector('table');
+  const body = await page.textContent('body');
+  assert.ok(!/destination itself didn't answer/.test(body), 'a legacy trace must not claim to be incomplete');
+  assert.match(body, /previous traceroute engine/);
+  await page.goto(P(`/target/${ids.t[0]}`)); await page.click('text=Traceroute'); await page.waitForSelector('table');
+  assert.ok(!/destination itself didn't answer/.test(await page.textContent('body')), 'a complete trace shows no warning');
   assert.deepEqual(page.errors, []);
 });
 

@@ -10,7 +10,12 @@ const { loadSettings } = require('../shared/settings');
 const CONCURRENCY = 4;
 const PENDING_RECHECK_SECONDS = 15 * 60; // a suspected change is re-verified soon, not tomorrow
 
-const defaultDeps = { runTraceroute: traceroute.runTraceroute, annotateHops: asnLookup.annotateHops };
+const defaultDeps = {
+  runTraceroute: traceroute.runTraceroute,
+  annotateHops: asnLookup.annotateHops,
+  // origin AS of the destination address, to tell "host filters probes" from "path stopped short"
+  lookupDest: async (db, ip) => (await asnLookup.lookupAsns(db, [ip])).get(ip)?.asn ?? null,
+};
 
 function ensureHistoryTable(db) {
   db.exec(`
@@ -51,7 +56,15 @@ async function traceAndCache(target, log, deps = defaultDeps) {
   catch (err) { if (log) log(`ASN lookup failed (${err.message}) — using address-based comparison`); }
 
   const path = asPath(hops);
-  const complete = !!result.complete;
+  // A trace is complete if it reached the host, OR got into the destination's own network: plenty of
+  // hosts drop probes aimed at themselves, but the route to their network is still fully known.
+  let complete = !!result.complete;
+  if (!complete && result.destIp && path.length) {
+    try {
+      const destAsn = await (deps.lookupDest || defaultDeps.lookupDest)(db, result.destIp);
+      if (destAsn != null && path[path.length - 1] === destAsn) complete = true;
+    } catch { /* ASN lookup is best-effort */ }
+  }
   const rec = { path, complete };
   const meta = JSON.stringify({ path, complete, method: result.method || null });
 

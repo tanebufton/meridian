@@ -327,6 +327,15 @@
           "packet_count": 10,
           "enabled": true,
           "notes": "AS18200"
+        },
+        {
+          "name": "[PF] OPT - French Polynesia",
+          "host": "www.opt.pf",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Tahiti (AS9471)"
         }
       ]
     },
@@ -362,6 +371,42 @@
           "packet_count": 10,
           "enabled": true,
           "notes": "AS7552"
+        },
+        {
+          "name": "[MY] MyIX - Malaysia",
+          "host": "www.myix.my",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Malaysian internet exchange host (AS45352)"
+        },
+        {
+          "name": "[MY] MIMOS - Malaysia",
+          "host": "www.mimos.my",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS38005"
+        },
+        {
+          "name": "[PH] UP Diliman - Philippines",
+          "host": "www.upd.edu.ph",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS23862"
+        },
+        {
+          "name": "[ID] IIX - Indonesia",
+          "host": "www.iix.net.id",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Indonesian internet exchange (AS4622)"
         }
       ]
     },
@@ -379,6 +424,33 @@
           "packet_count": 10,
           "enabled": true,
           "notes": "AS131660"
+        },
+        {
+          "name": "[JP] IIJ - Japan",
+          "host": "www.iij.ad.jp",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Carrier (AS2497)"
+        },
+        {
+          "name": "[JP] WIDE Project - Japan",
+          "host": "www.wide.ad.jp",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS2500"
+        },
+        {
+          "name": "[TW] TWNIC - Taiwan",
+          "host": "www.twnic.tw",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Taiwan Fixed Network (AS9924)"
         }
       ]
     },
@@ -405,6 +477,24 @@
           "packet_count": 10,
           "enabled": true,
           "notes": "In-datacentre ping host"
+        },
+        {
+          "name": "[BD] BDREN - Bangladesh",
+          "host": "www.bdren.net.bd",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Research & education network (AS63961)"
+        },
+        {
+          "name": "[NP] Nepal Telecom",
+          "host": "www.ntc.net.np",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS23752"
         }
       ]
     },
@@ -529,6 +619,67 @@
         {
           "name": "[AU] Vultr - Melbourne",
           "host": "mel-au-ping.vultr.com",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "In-datacentre ping host"
+        },
+        {
+          "name": "[AU] AARNet - Sydney",
+          "host": "mirror.aarnet.edu.au",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Australian academic network (AS7575)"
+        },
+        {
+          "name": "[AU] Vocus - Sydney",
+          "host": "speedtest.syd.m2core.net.au",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Carrier (AS9443)"
+        },
+        {
+          "name": "[AU] IX Australia",
+          "host": "www.ix.asn.au",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "Internet exchange host (AS10084)"
+        }
+      ]
+    },
+    {
+      "name": "Asia - HK / TH",
+      "description": "",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[HK] HKUST",
+          "host": "www.ust.hk",
+          "probe_type": "icmp",
+          "interval_seconds": 300,
+          "packet_count": 10,
+          "enabled": true,
+          "notes": "AS3363"
+        }
+      ]
+    },
+    {
+      "name": "Asia - West/Central",
+      "description": "",
+      "sort_order": 0,
+      "public": true,
+      "targets": [
+        {
+          "name": "[IL] Vultr - Tel Aviv",
+          "host": "tlv-il-ping.vultr.com",
           "probe_type": "icmp",
           "interval_seconds": 300,
           "packet_count": 10,

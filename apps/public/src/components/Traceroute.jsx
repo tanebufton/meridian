@@ -83,11 +83,14 @@ function History({ targetId, currentRanAt }) {
   const hist = useTracerouteHistory(targetId);
   const [open, setOpen] = useState(null);
   const entries = (hist.data?.history || []);
-  if (hist.isLoading || entries.length <= 1) return null;
+  if (hist.isLoading || entries.length === 0) return null;
+  if (entries.length === 1) {
+    return <div className="muted" style={{ fontSize: 12, marginTop: 14 }}>No route change recorded since {fmtTs(entries[0].ran_at)} — this is the route it has used throughout.</div>;
+  }
 
   return (
     <div style={{ marginTop: 18 }}>
-      <div className="tr-sub">Route changes · {entries.length - 1} recorded</div>
+      <div className="tr-sub">Route changes · {entries.length - 1} recorded · current route in place since {fmtTs(entries[0].ran_at)}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {entries.map((e, i) => {
           const older = entries[i + 1];
@@ -147,7 +150,10 @@ export default function TraceroutePanel({ targetId }) {
               {tr.isLoading ? 'Loading…' : ranAt ? 'Traceroute returned no hops — the host may block probes, or will retry shortly.' : 'No traceroute data yet — the probe worker runs this automatically.'}
             </div>
           ) : (<>
-            {tr.data.complete === false && <div className="tr-note">The final hops didn't answer, so this path may stop short of the destination. That is common — many networks filter traceroute — and doesn't mean the target is down.</div>}
+            {/* Only warn for traces the current engine recorded as incomplete. Older traces have no completeness
+                information at all and used to be shown as "incomplete" by default, which was simply wrong. */}
+            {tr.data.method && tr.data.complete === false && <div className="tr-note">The destination itself didn't answer, so this path may stop short of it. That is common — many hosts filter traceroute — and doesn't mean the target is down.</div>}
+            {!tr.data.method && <div className="tr-note info">This trace was recorded by the previous traceroute engine and will refresh shortly.</div>}
             {ecmpHops > 0 && <div className="tr-note info">{ecmpHops} hop{ecmpHops > 1 ? 's are' : ' is'} load-balanced across equal-cost paths. Differences between these routers are normal and are not counted as route changes.</div>}
             <HopTable hops={hops} />
           </>)}

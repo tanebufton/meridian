@@ -109,7 +109,7 @@ function spawnTrace(host, useIPv6, method, timeoutMs = 90_000) {
   return new Promise((resolve) => {
     if (!isSafeHost(host)) return resolve({ hops: [], destIp: null, error: 'Invalid host' });
     // `traceroute -6` instead of the separate traceroute6 binary (absent on newer distros)
-    const args = [...(useIPv6 ? ['-6'] : []), ...METHOD_ARGS[method], '-n', '-m', '25', '-w', '2', '-q', '3', '--', host];
+    const args = [...(useIPv6 ? ['-6'] : []), ...METHOD_ARGS[method], '-n', '-m', '30', '-w', '2', '-q', '3', '--', host];
     const proc = spawn('traceroute', args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
     let stdout = '';

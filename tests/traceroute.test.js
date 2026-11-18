@@ -156,3 +156,19 @@ test('the cache always shows the latest run, with method and completeness', asyn
   const c = db.prepare('SELECT method, complete, result_json FROM traceroute_cache WHERE target_id=?').get(t.id);
   assert.equal(c.method, 'icmp'); assert.equal(c.complete, 0); assert.equal(JSON.parse(c.result_json).length, 2);
 });
+
+test('a host that drops probes still counts as complete when the path reaches its network', async () => {
+  const t = seedTarget(db);
+  const filtered = { ...run([9500, 4637, 15169], false), destIp: '203.0.113.99' };
+  await traceAndCache(t, null, { ...deps([filtered]), lookupDest: async () => 15169 });
+  assert.equal(db.prepare('SELECT complete FROM traceroute_cache WHERE target_id=?').get(t.id).complete, 1, 'reached AS15169, the destination network');
+
+  const t2 = seedTarget(db);
+  const stoppedShort = { ...run([9500, 4637], false), destIp: '203.0.113.99' };
+  await traceAndCache(t2, null, { ...deps([stoppedShort]), lookupDest: async () => 15169 });
+  assert.equal(db.prepare('SELECT complete FROM traceroute_cache WHERE target_id=?').get(t2.id).complete, 0, 'stopped before the destination network');
+
+  const t3 = seedTarget(db);
+  await traceAndCache(t3, null, { ...deps([{ ...run([9500, 15169], false), destIp: '203.0.113.99' }]), lookupDest: async () => { throw new Error('dns down'); } });
+  assert.equal(db.prepare('SELECT complete FROM traceroute_cache WHERE target_id=?').get(t3.id).complete, 0, 'a failed lookup never turns into a false "complete"');
+});
