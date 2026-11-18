@@ -2,6 +2,7 @@
 
 const { getDb } = require('../db/db');
 const { runTraceroute, runTraceroute6 } = require('./traceroute');
+const { probeHostname } = require('../shared/hosts');
 
 const CONCURRENCY = 4;
 
@@ -46,9 +47,11 @@ function isDramaticChange(prevHops, newHops) {
 
 async function traceAndCache(target, log) {
   const db = getDb();
-  if (log) log(`Traceroute: ${target.host}`);
-  const useIPv6 = target.probe_type === 'icmp6';
-  const result = useIPv6 ? await runTraceroute6(target.host) : await runTraceroute(target.host);
+  const host = probeHostname(target);
+  if (!host) return 0;
+  if (log) log(`Traceroute: ${host}`);
+  const useIPv6 = target.probe_type === 'icmp6' || host.includes(':');
+  const result = useIPv6 ? await runTraceroute6(host) : await runTraceroute(host);
   const now = Math.floor(Date.now() / 1000);
 
   db.prepare(

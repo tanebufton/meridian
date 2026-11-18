@@ -6,6 +6,8 @@ import AdminDashboard from './pages/AdminDashboard';
 import Targets from './pages/Targets';
 import Groups from './pages/Groups';
 import Settings from './pages/Settings';
+import Incidents from './pages/Incidents';
+import Maintenance from './pages/Maintenance';
 
 function ProtectedLayout() {
   const { data, isLoading, isError } = useMe();
@@ -21,6 +23,8 @@ function ProtectedLayout() {
           <Route path="/" element={<AdminDashboard />} />
           <Route path="/targets" element={<Targets />} />
           <Route path="/groups" element={<Groups />} />
+          <Route path="/incidents" element={<Incidents />} />
+          <Route path="/maintenance" element={<Maintenance />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>

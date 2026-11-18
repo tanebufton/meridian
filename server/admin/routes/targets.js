@@ -2,8 +2,10 @@
 
 const { getDb } = require('../../db/db');
 const { requireAuth } = require('../middleware');
+const { z } = require('zod');
 const { TargetSchema, EnabledSchema } = require('../../shared/schemas');
 const { getStatus } = require('../../shared/constants');
+const { maintenanceMap } = require('../../shared/maintenance');
 
 module.exports = async function targetRoutes(app) {
   const auth = { preHandler: requireAuth };
@@ -13,28 +15,34 @@ module.exports = async function targetRoutes(app) {
     const db = getDb();
     const targets = db.prepare(
       `SELECT t.id, t.group_id, t.name, t.host, t.probe_type, t.interval_seconds,
-              t.packet_count, t.enabled, t.created_at, g.name AS group_name,
+              t.packet_count, t.enabled, t.notes, t.created_at, g.name AS group_name,
               pr.latency_avg, pr.packet_loss, pr.dns_success, pr.error, pr.timestamp AS last_checked
        FROM targets t
        JOIN groups g ON g.id = t.group_id
-       LEFT JOIN (
-         SELECT target_id, latency_avg, packet_loss, dns_success, error, timestamp,
-                ROW_NUMBER() OVER (PARTITION BY target_id ORDER BY timestamp DESC) AS rn
-         FROM probe_results
-       ) pr ON pr.target_id = t.id AND pr.rn = 1
+       LEFT JOIN probe_results pr ON pr.id = (
+         SELECT r.id FROM probe_results r WHERE r.target_id = t.id ORDER BY r.timestamp DESC, r.id DESC LIMIT 1
+       )
        ORDER BY g.sort_order ASC, t.id ASC`
     ).all();
 
+    const maint = maintenanceMap(db, targets);
+    const open = new Map(
+      db.prepare('SELECT target_id, id, started_at, ack_at FROM incidents WHERE ended_at IS NULL').all().map((i) => [i.target_id, i])
+    );
     return targets.map((t) => ({
       ...t,
       status: getStatus(t.packet_loss, t.dns_success, t.probe_type, !!t.error),
+      in_maintenance: maint.has(t.id),
+      incident_id: open.get(t.id)?.id ?? null,
+      incident_started_at: open.get(t.id)?.started_at ?? null,
+      incident_acknowledged: !!open.get(t.id)?.ack_at,
     }));
   });
 
   // POST /api/admin/targets
   app.post('/targets', auth, async (req, reply) => {
     const result = TargetSchema.safeParse(req.body);
-    if (!result.success) return reply.status(400).send({ error: result.error.flatten() });
+    if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message ? `${result.error.issues[0].path.join('.') || 'request'}: ${result.error.issues[0].message}` : 'Invalid request' });
 
     const d = result.data;
     const db = getDb();
@@ -55,7 +63,7 @@ module.exports = async function targetRoutes(app) {
     if (isNaN(id)) return reply.status(400).send({ error: 'Invalid id' });
 
     const result = TargetSchema.safeParse(req.body);
-    if (!result.success) return reply.status(400).send({ error: result.error.flatten() });
+    if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message ? `${result.error.issues[0].path.join('.') || 'request'}: ${result.error.issues[0].message}` : 'Invalid request' });
 
     const d = result.data;
     const db = getDb();
@@ -87,7 +95,7 @@ module.exports = async function targetRoutes(app) {
     if (isNaN(id)) return reply.status(400).send({ error: 'Invalid id' });
 
     const result = EnabledSchema.safeParse(req.body);
-    if (!result.success) return reply.status(400).send({ error: result.error.flatten() });
+    if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message ? `${result.error.issues[0].path.join('.') || 'request'}: ${result.error.issues[0].message}` : 'Invalid request' });
 
     const db = getDb();
     const info = db.prepare('UPDATE targets SET enabled = ? WHERE id = ?').run(
@@ -114,22 +122,21 @@ module.exports = async function targetRoutes(app) {
 
   // POST /api/admin/targets/bulk — create multiple targets in one transaction
   app.post('/targets/bulk', auth, async (req, reply) => {
-    const { z } = require('zod');
     const BulkSchema = z.object({
       targets: z.array(TargetSchema).min(1).max(200),
     });
     const result = BulkSchema.safeParse(req.body);
-    if (!result.success) return reply.status(400).send({ error: result.error.flatten() });
+    if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message ? `${result.error.issues[0].path.join('.') || 'request'}: ${result.error.issues[0].message}` : 'Invalid request' });
 
     const db = getDb();
     const insert = db.prepare(
-      `INSERT INTO targets (group_id, name, host, probe_type, interval_seconds, packet_count, enabled)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO targets (group_id, name, host, probe_type, interval_seconds, packet_count, enabled, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const insertMany = db.transaction((rows) => {
       const ids = [];
       for (const t of rows) {
-        const info = insert.run(t.group_id, t.name, t.host, t.probe_type, t.interval_seconds, t.packet_count, t.enabled ? 1 : 0);
+        const info = insert.run(t.group_id, t.name, t.host, t.probe_type, t.interval_seconds, t.packet_count, t.enabled ? 1 : 0, t.notes ?? null);
         ids.push(info.lastInsertRowid);
       }
       return ids;
@@ -141,10 +148,9 @@ module.exports = async function targetRoutes(app) {
 
   // POST /api/admin/targets/bulk-interval — apply interval to all targets
   app.post('/targets/bulk-interval', auth, async (req, reply) => {
-    const { z } = require('zod');
     const schema = z.object({ interval_seconds: z.number().int().min(5).max(3600) });
     const result = schema.safeParse(req.body);
-    if (!result.success) return reply.status(400).send({ error: result.error.flatten() });
+    if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message ? `${result.error.issues[0].path.join('.') || 'request'}: ${result.error.issues[0].message}` : 'Invalid request' });
 
     const db = getDb();
     const info = db.prepare('UPDATE targets SET interval_seconds = ?').run(result.data.interval_seconds);

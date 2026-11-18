@@ -3,6 +3,7 @@
 const { getDb } = require('../../db/db');
 const { requireAuth } = require('../middleware');
 const { NotificationChannelSchema, EnabledSchema } = require('../../shared/schemas');
+const { validateChannelUrl } = require('../../shared/hosts');
 
 module.exports = async function notificationRoutes(app) {
   const auth = { preHandler: requireAuth };
@@ -16,7 +17,7 @@ module.exports = async function notificationRoutes(app) {
   // POST /api/admin/notifications
   app.post('/notifications', auth, async (req, reply) => {
     const result = NotificationChannelSchema.safeParse(req.body);
-    if (!result.success) return reply.status(400).send({ error: result.error.flatten() });
+    if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message || 'Invalid request' });
 
     const { name, type, url, enabled } = result.data;
     const db = getDb();
@@ -32,7 +33,7 @@ module.exports = async function notificationRoutes(app) {
     if (isNaN(id)) return reply.status(400).send({ error: 'Invalid id' });
 
     const result = NotificationChannelSchema.safeParse(req.body);
-    if (!result.success) return reply.status(400).send({ error: result.error.flatten() });
+    if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message || 'Invalid request' });
 
     const { name, type, url, enabled } = result.data;
     const db = getDb();
@@ -51,7 +52,7 @@ module.exports = async function notificationRoutes(app) {
     if (isNaN(id)) return reply.status(400).send({ error: 'Invalid id' });
 
     const result = EnabledSchema.safeParse(req.body);
-    if (!result.success) return reply.status(400).send({ error: result.error.flatten() });
+    if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message || 'Invalid request' });
 
     const db = getDb();
     const info = db.prepare(
@@ -74,13 +75,8 @@ module.exports = async function notificationRoutes(app) {
 
   // POST /api/admin/notifications/test-channel — test without a saved channel (used by add modal)
   app.post('/notifications/test-channel', auth, async (req, reply) => {
-    const { z } = require('zod');
-    const schema = z.object({
-      type: z.enum(['webhook', 'slack', 'discord', 'ntfy', 'telegram']),
-      url: z.string().min(1).max(1000),
-    });
-    const result = schema.safeParse(req.body);
-    if (!result.success) return reply.status(400).send({ error: result.error.flatten() });
+    const result = NotificationChannelSchema.safeParse({ name: 'test', ...req.body });
+    if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message || 'Invalid request' });
 
     const { sendToChannel } = require('../../probe/notifier');
     try {

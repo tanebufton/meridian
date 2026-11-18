@@ -1,9 +1,10 @@
 'use strict';
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const path = require('path');
 const fastify = require('fastify');
-const { closeDb } = require('../db/db');
+const { closeDb, requireSchema } = require('../db/db');
+const { trustedProxies } = require('../shared/proxy');
 
 const app = fastify({
   logger: {
@@ -11,7 +12,7 @@ const app = fastify({
     // Never log request bodies — they could contain sensitive data from probes
     serializers: { req: (req) => ({ method: req.method, url: req.url }) },
   },
-  trustProxy: process.env.TRUST_CF_HEADERS === 'true',
+  trustProxy: trustedProxies(),
   // Reject request bodies over 16 KB — the public API has no write endpoints,
   // so any large body is either a bug or an attack
   bodyLimit: 16_384,
@@ -20,6 +21,8 @@ const app = fastify({
 });
 
 async function start() {
+  requireSchema();
+
   // Security headers
   await app.register(require('@fastify/helmet'), {
     contentSecurityPolicy: {
@@ -59,10 +62,11 @@ async function start() {
   await app.register(require('@fastify/rate-limit'), {
     max: 600,
     timeWindow: '1 minute',
-    keyGenerator: (req) =>
-      req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.ip,
+    keyGenerator: (req) => req.ip,
     errorResponseBuilder: (_req, context) => ({
+      statusCode: 429,
       error: 'Too many requests',
+      message: 'Too many requests',
       retryAfter: Math.ceil(context.ttl / 1000),
     }),
   });
@@ -99,26 +103,26 @@ async function start() {
   await app.register(require('./routes/groups'), { prefix: '/api/v1' });
   await app.register(require('./routes/targets'), { prefix: '/api/v1' });
   await app.register(require('./routes/summary'), { prefix: '/api/v1' });
+  await app.register(require('./routes/incidents'), { prefix: '' });
+  await app.register(require('./routes/badge'), { prefix: '' });
 
   // SPA fallback
   app.setNotFoundHandler(async (req, reply) => {
-    if (req.url.startsWith('/api/')) {
+    if (req.url.startsWith('/api/') || req.url.startsWith('/badge/') || req.url === '/feed.atom') {
       return reply.status(404).send({ error: 'Not found' });
     }
     return reply.sendFile('index.html');
   });
 
-  // Hide implementation details from error responses in production.
-  // Note: @fastify/rate-limit may not set err.statusCode when errorResponseBuilder
-  // returns a plain object — check err.retryAfter as a fallback signal for 429s.
+  // Hide implementation details from error responses in production
   app.setErrorHandler(async (err, req, reply) => {
-    const status = err.statusCode || err.status || (err.retryAfter != null ? 429 : 500);
+    const status = err.statusCode || err.status || 500;
     if (status === 429) {
       return reply.status(429).send({ error: 'Too many requests', retryAfter: err.retryAfter ?? 60 });
     }
-    app.log.error({ err, url: req.url }, 'Request error');
-    if (process.env.NODE_ENV === 'production' && status >= 500) {
-      return reply.status(500).send({ error: 'Internal server error' });
+    if (status >= 500) {
+      app.log.error({ err, url: req.url }, 'Request error');
+      return reply.status(500).send({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message });
     }
     return reply.status(status).send({ error: err.message });
   });

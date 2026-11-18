@@ -1,6 +1,7 @@
 'use strict';
 
 const { spawn } = require('child_process');
+const { isSafeHost } = require('../shared/hosts');
 
 /**
  * Run a ping probe against host with packetCount packets.
@@ -13,10 +14,18 @@ const { spawn } = require('child_process');
  */
 function pingHost(host, packetCount, useIPv6 = false) {
   return new Promise((resolve) => {
+    // Hosts come from the database. Never let one be parsed as an option (e.g. "-f").
+    if (!isSafeHost(host)) {
+      return resolve({
+        latency_min: null, latency_avg: null, latency_max: null, latency_mdev: null,
+        packet_loss: 100, rtts: Array(packetCount).fill(null), resolved_ip: null,
+        error: 'Invalid host',
+      });
+    }
     const deadline = packetCount + 15;
-    const args = ['-c', String(packetCount), '-i', '1', '-W', '5', '-w', String(deadline), host];
-    const cmd = useIPv6 ? 'ping6' : 'ping';
-    const proc = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    // `ping -6` rather than `ping6`: the ping6 binary is absent on many modern distros.
+    const args = [...(useIPv6 ? ['-6'] : []), '-c', String(packetCount), '-i', '1', '-W', '5', '-w', String(deadline), '--', host];
+    const proc = spawn('ping', args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
     let stdout = '';
     let stderr = '';
@@ -41,10 +50,8 @@ function pingHost(host, packetCount, useIPv6 = false) {
       const lossMatch = stdout.match(/([\d.]+)%\s+packet\s+loss/);
       const packet_loss = lossMatch ? parseFloat(lossMatch[1]) : 100;
 
-      // Resolved IP: "PING hostname (1.2.3.4) ..." or "PING6(...) host --> addr"
-      const resolvedMatch = useIPv6
-        ? stdout.match(/^PING6\([^)]+\)\s+\S+\s+-->\s+(\S+)/m)
-        : stdout.match(/^PING\s+\S+\s+\((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)/m);
+      // Resolved IP: "PING hostname (1.2.3.4) 56(84) bytes" — same shape for v4 and v6
+      const resolvedMatch = stdout.match(/^PING\s+\S+\s+\(([0-9a-fA-F:.]+)\)/m);
       const resolved_ip = resolvedMatch ? resolvedMatch[1] : null;
 
       if (rttMatch) {
@@ -75,6 +82,7 @@ function pingHost(host, packetCount, useIPv6 = false) {
 
     proc.on('error', (err) => {
       resolve({
+        resolved_ip:  null,
         latency_min:  null,
         latency_avg:  null,
         latency_max:  null,

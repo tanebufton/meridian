@@ -2,6 +2,9 @@
 
 const { getDb } = require('../../db/db');
 const { getStatus } = require('../../shared/constants');
+const { getTargetStates } = require('../../shared/status');
+const { buildResultsQuery } = require('../../shared/results');
+const { ResultsRangeSchema } = require('../../shared/schemas');
 
 module.exports = async function groupRoutes(app) {
   // GET /api/v1/groups — all groups with targets and current status
@@ -18,36 +21,28 @@ module.exports = async function groupRoutes(app) {
               pr.dns_success, pr.resolved_ip, pr.error, pr.timestamp,
               tu.uptime_24h
        FROM targets t
-       LEFT JOIN (
-         SELECT target_id, latency_min, latency_avg, latency_max, latency_mdev, packet_loss,
-                dns_success, resolved_ip, error, timestamp,
-                ROW_NUMBER() OVER (PARTITION BY target_id ORDER BY timestamp DESC) AS rn
-         FROM probe_results
-       ) pr ON pr.target_id = t.id AND pr.rn = 1
+       LEFT JOIN probe_results pr ON pr.id = (
+         SELECT r.id FROM probe_results r WHERE r.target_id = t.id ORDER BY r.timestamp DESC, r.id DESC LIMIT 1
+       )
        LEFT JOIN target_uptime tu ON tu.target_id = t.id
        WHERE t.enabled = 1
        ORDER BY t.id ASC`
     ).all();
 
-    // Last 20 probe outcomes per target for the status history ribbon
-    const recentRows = db.prepare(
-      `SELECT target_id, packet_loss, dns_success, probe_type, error
-       FROM (
-         SELECT pr.target_id, pr.packet_loss, pr.dns_success, pr.error, t.probe_type,
-                ROW_NUMBER() OVER (PARTITION BY pr.target_id ORDER BY pr.timestamp DESC) AS rn
-         FROM probe_results pr
-         INNER JOIN targets t ON t.id = pr.target_id
-         WHERE t.enabled = 1 AND pr.timestamp >= unixepoch() - 86400
-       )
-       WHERE rn <= 20
-       ORDER BY target_id, rn DESC`
-    ).all();
-
+    // Last 20 probe outcomes per target for the status history ribbon (one indexed
+    // LIMIT 20 lookup per target instead of a window function over a day of results)
+    const lastTwenty = db.prepare(
+      `SELECT packet_loss, dns_success, error FROM probe_results
+       WHERE target_id = ? ORDER BY timestamp DESC, id DESC LIMIT 20`
+    );
     const recentByTarget = {};
-    for (const r of recentRows) {
-      if (!recentByTarget[r.target_id]) recentByTarget[r.target_id] = [];
-      recentByTarget[r.target_id].push(getStatus(r.packet_loss, r.dns_success, r.probe_type, !!r.error));
+    for (const t of targets) {
+      recentByTarget[t.id] = lastTwenty.all(t.id).reverse()
+        .map((r) => getStatus(r.packet_loss, r.dns_success, t.probe_type, !!r.error));
     }
+
+    // Maintenance + open-incident overlay (shared with /metrics and /summary)
+    const overlay = new Map(getTargetStates(db).map((st) => [st.id, st]));
 
     const targetsByGroup = {};
     for (const t of targets) {
@@ -68,6 +63,10 @@ module.exports = async function groupRoutes(app) {
         uptime_24h: t.uptime_24h,
         last_checked: t.timestamp,
         recent_statuses: recentByTarget[t.id] || [],
+        in_maintenance: overlay.get(t.id)?.in_maintenance ?? false,
+        maintenance_ends_at: overlay.get(t.id)?.maintenance_ends_at ?? null,
+        incident_started_at: overlay.get(t.id)?.incident_started_at ?? null,
+        incident_acknowledged: !!overlay.get(t.id)?.incident_ack_at,
       };
       if (!targetsByGroup[t.group_id]) targetsByGroup[t.group_id] = [];
       targetsByGroup[t.group_id].push(entry);
@@ -77,5 +76,30 @@ module.exports = async function groupRoutes(app) {
       ...g,
       targets: targetsByGroup[g.id] || [],
     }));
+  });
+
+  // GET /api/v1/groups/:id/results?range=12h — every enabled target's series in ONE
+  // request. The group page used to fire a request per target (140+ for a big group),
+  // which also hammered the rate limiter.
+  app.get('/groups/:id/results', async (req, reply) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id < 1) return reply.status(400).send({ error: 'Invalid id' });
+    const range = ResultsRangeSchema.safeParse(req.query.range || '12h');
+    if (!range.success) return reply.status(400).send({ error: 'Invalid range' });
+
+    const db = getDb();
+    if (!db.prepare('SELECT id FROM groups WHERE id = ?').get(id)) return reply.status(404).send({ error: 'Not found' });
+
+    const ids = db.prepare('SELECT id FROM targets WHERE group_id = ? AND enabled = 1').all(id).map((t) => t.id);
+    const targets = {};
+    const r2 = (v) => (v == null ? null : Math.round(v * 100) / 100);
+    for (const tid of ids) {
+      // Only what the sparkline needs (the full rows carry errors, IPs, ids…)
+      targets[tid] = buildResultsQuery(db, tid, range.data).map((d) => ({
+        timestamp: d.timestamp, latency_min: r2(d.latency_min), latency_avg: r2(d.latency_avg),
+        latency_max: r2(d.latency_max), packet_loss: d.packet_loss, dns_time: r2(d.dns_time),
+      }));
+    }
+    return { range: range.data, targets };
   });
 };

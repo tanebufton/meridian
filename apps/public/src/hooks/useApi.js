@@ -62,3 +62,36 @@ export function useTracerouteHistory(id) {
   });
 }
 
+
+// All of a group's sparkline series in a single request
+export function useGroupResults(id, range = '12h') {
+  return useQuery({
+    queryKey: ['group-results', id, range],
+    queryFn: () => apiFetch(`/api/v1/groups/${id}/results?range=${range}`),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useIncidents(days = 30) {
+  return useQuery({
+    queryKey: ['incidents', days],
+    queryFn: () => apiFetch(`/api/v1/incidents?days=${days}`),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useTargetIncidents(id) {
+  return useQuery({
+    queryKey: ['target-incidents', id],
+    queryFn: () => apiFetch(`/api/v1/targets/${id}/incidents`),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useAvailability(id, days = 90) {
+  return useQuery({
+    queryKey: ['availability', id, days],
+    queryFn: () => apiFetch(`/api/v1/targets/${id}/availability?days=${days}`),
+    staleTime: 300_000,
+  });
+}

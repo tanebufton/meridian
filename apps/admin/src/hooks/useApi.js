@@ -20,8 +20,8 @@ export async function apiFetch(url, options = {}) {
 
   const res = await fetch(url, { ...options, headers, credentials: 'same-origin' });
 
-  if (res.status === 401) {
-    // Redirect to login
+  if (res.status === 401 && window.location.pathname !== '/login') {
+    // Session expired — go to the login page
     window.location.href = '/login';
     return;
   }
@@ -68,4 +68,38 @@ export function useMutate(queryKeysToInvalidate = []) {
       queryKeysToInvalidate.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
     },
   });
+}
+
+export function useIncidents(status = 'all', limit = 100) {
+  return useQuery({
+    queryKey: ['admin-incidents', status, limit],
+    queryFn: () => apiFetch(`/api/admin/incidents?status=${status}&limit=${limit}`),
+    refetchInterval: 30_000,
+  });
+}
+
+// Just the number of open incidents, for the sidebar badge
+export function useOpenIncidentCount() {
+  return useQuery({
+    queryKey: ['admin-incidents', 'open', 500],
+    queryFn: () => apiFetch('/api/admin/incidents?status=open&limit=500'),
+    refetchInterval: 30_000,
+    select: (rows) => rows.filter((i) => !i.ack_at).length,
+  });
+}
+
+export function useMaintenance() {
+  return useQuery({
+    queryKey: ['admin-maintenance'],
+    queryFn: () => apiFetch('/api/admin/maintenance'),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useAudit(limit = 100) {
+  return useQuery({ queryKey: ['admin-audit', limit], queryFn: () => apiFetch(`/api/admin/audit?limit=${limit}`) });
+}
+
+export function useTwoFactor() {
+  return useQuery({ queryKey: ['admin-2fa'], queryFn: () => apiFetch('/api/admin/auth/2fa') });
 }

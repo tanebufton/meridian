@@ -1,0 +1,105 @@
+import { useRef, useState } from 'react';
+import { useMutate, apiFetch } from '../../hooks/useApi';
+import Toast from '../../components/Toast';
+import { useToast } from '../../hooks/useToast';
+import { useConfirm } from '../../components/ConfirmDialog';
+
+function ImportModal({ data, onDone, onClose }) {
+  const [mode, setMode] = useState('merge');
+  const [error, setError] = useState('');
+  const ask = useConfirm();
+  const mut = useMutate(['admin-groups', 'admin-targets']);
+  const groups = data.groups?.length ?? 0;
+  const targets = data.groups?.reduce((n, g) => n + (g.targets?.length ?? 0), 0) ?? 0;
+
+  async function run() {
+    setError('');
+    if (mode === 'replace' && !(await ask({
+      title: 'Replace everything?',
+      message: 'All existing groups, targets AND their history will be deleted and replaced. A backup of the database is saved first, but restoring it is a manual step.',
+      confirmLabel: 'Delete and replace', danger: true,
+    }))) return;
+    try {
+      const res = await mut.mutateAsync({ url: '/api/admin/config/import', method: 'POST', body: { ...data, mode } });
+      onDone(res);
+    } catch (err) { setError(err.message); }
+  }
+
+  return (
+    <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-title">Import configuration</div>
+        <p style={{ fontSize: 13, marginBottom: 14 }}>The file contains <strong>{groups}</strong> group{groups !== 1 ? 's' : ''} and <strong>{targets}</strong> target{targets !== 1 ? 's' : ''}.</p>
+        {error && <div className="error-msg" role="alert">{error}</div>}
+        <label className={`choice${mode === 'merge' ? ' selected' : ''}`}>
+          <input type="radio" name="mode" checked={mode === 'merge'} onChange={() => setMode('merge')} />
+          <div><strong>Add what's missing</strong> <span className="badge badge-up">Recommended</span>
+            <div className="muted help">Creates groups and targets that don't exist yet. Existing ones, and all history, are left alone.</div></div>
+        </label>
+        <label className={`choice${mode === 'replace' ? ' selected danger' : ''}`}>
+          <input type="radio" name="mode" checked={mode === 'replace'} onChange={() => setMode('replace')} />
+          <div><strong>Replace everything</strong>
+            <div className="muted help">Deletes all current groups, targets <em>and probe history</em> first.</div></div>
+        </label>
+        <div className="modal-actions">
+          <button className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className={mode === 'replace' ? 'btn-danger' : ''} disabled={mut.isPending} onClick={run}>{mut.isPending ? 'Importing…' : mode === 'replace' ? 'Replace…' : 'Import'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function Data() {
+  const { toasts, toast } = useToast();
+  const fileRef = useRef(null);
+  const [pending, setPending] = useState(null);
+  const backfill = useMutate([]);
+
+  async function exportConfig() {
+    try {
+      const data = await apiFetch('/api/admin/config/export');
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+      const a = Object.assign(document.createElement('a'), { href: url, download: `meridian-config-${new Date().toISOString().slice(0, 10)}.json` });
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  async function pickFile(e) {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try { setPending(JSON.parse(await file.text())); }
+    catch { toast('That file isn\'t valid JSON', 'error'); }
+  }
+
+  return (
+    <div>
+      <div className="card section">
+        <h2 className="card-title">Export / import</h2>
+        <p className="muted help" style={{ marginBottom: 14 }}>Back up or move your groups and targets as a JSON file. Probe history isn't included.</p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="btn-ghost" onClick={exportConfig}>Export config</button>
+          <button className="btn-ghost" onClick={() => fileRef.current?.click()}>Import config…</button>
+        </div>
+        <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={pickFile} />
+      </div>
+
+      <div className="card section">
+        <h2 className="card-title">Traceroute</h2>
+        <p className="muted help" style={{ marginBottom: 14 }}>Run traceroute for every target that has no path data yet (or an empty one). Four at a time; results appear within a few minutes.</p>
+        <button className="btn-ghost" disabled={backfill.isPending} onClick={async () => {
+          try { const r = await backfill.mutateAsync({ url: '/api/admin/traceroute/backfill', method: 'POST', body: {} }); toast(r.message || 'Started'); }
+          catch (err) { toast(err.message, 'error'); }
+        }}>{backfill.isPending ? 'Starting…' : 'Run traceroute backfill'}</button>
+      </div>
+
+      {pending && <ImportModal data={pending} onClose={() => setPending(null)} onDone={(res) => {
+        setPending(null);
+        const i = res.imported;
+        toast(`Added ${i.groups} group${i.groups !== 1 ? 's' : ''} and ${i.targets} target${i.targets !== 1 ? 's' : ''}${i.skipped ? ` (${i.skipped} already existed)` : ''}`);
+      }} />}
+      <Toast toasts={toasts} />
+    </div>
+  );
+}

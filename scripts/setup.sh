@@ -17,15 +17,15 @@ echo ""
 echo "  Network Latency Monitor — Setup"
 echo ""
 
-# 1. Check Node.js >= 18
+# 1. Check Node.js >= 20
 if ! command -v node &>/dev/null; then
   echo -e "${RED}Error: Node.js is not installed.${NC}"
   exit 1
 fi
 
-NODE_VER=$(node -e "process.exit(parseInt(process.version.slice(1).split('.')[0]) >= 18 ? 0 : 1)" 2>/dev/null && echo "ok" || echo "fail")
+NODE_VER=$(node -e "process.exit(parseInt(process.version.slice(1).split('.')[0]) >= 20 ? 0 : 1)" 2>/dev/null && echo "ok" || echo "fail")
 if [[ "$NODE_VER" != "ok" ]]; then
-  echo -e "${RED}Error: Node.js >= 18 is required. Found: $(node --version)${NC}"
+  echo -e "${RED}Error: Node.js >= 20 is required. Found: $(node --version)${NC}"
   exit 1
 fi
 echo -e "${GREEN}✓ Node.js $(node --version)${NC}"

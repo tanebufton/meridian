@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS targets (
   group_id         INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   name             TEXT NOT NULL,
   host             TEXT NOT NULL,
-  probe_type       TEXT NOT NULL CHECK(probe_type IN ('icmp', 'icmp6', 'dns')),
+  probe_type       TEXT NOT NULL,  -- validated in the app (icmp, icmp6, dns, tcp, http)
   interval_seconds INTEGER NOT NULL DEFAULT 60,
   packet_count     INTEGER NOT NULL DEFAULT 10,
   enabled          INTEGER NOT NULL DEFAULT 1,
@@ -45,8 +45,11 @@ CREATE TABLE IF NOT EXISTS probe_aggregates (
   latency_min   REAL,
   latency_avg   REAL,
   latency_max   REAL,
+  latency_mdev  REAL,
   packet_loss   REAL,
   sample_count  INTEGER NOT NULL,
+  fail_count    INTEGER,
+
   UNIQUE(target_id, period_start, resolution)
 );
 
@@ -63,7 +66,11 @@ CREATE TABLE IF NOT EXISTS admin_users (
   username      TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   created_at    INTEGER NOT NULL DEFAULT (unixepoch()),
-  last_login    INTEGER
+  last_login    INTEGER,
+  totp_secret   TEXT,
+  totp_enabled  INTEGER NOT NULL DEFAULT 0,
+  totp_last_step INTEGER,
+  recovery_codes TEXT
 );
 
 CREATE TABLE IF NOT EXISTS admin_sessions (
@@ -115,3 +122,58 @@ CREATE INDEX IF NOT EXISTS idx_probe_aggregates_target_res_period ON probe_aggre
 -- Fixes the SCAN + TEMP B-TREE that shows up in EXPLAIN QUERY PLAN
 CREATE INDEX IF NOT EXISTS idx_probe_aggregates_resolution_period ON probe_aggregates(resolution, period_start DESC);
 
+
+
+-- Schema version tracking (see server/db/migrations.js)
+CREATE TABLE IF NOT EXISTS schema_version (
+  version    INTEGER PRIMARY KEY,
+  name       TEXT NOT NULL,
+  applied_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+-- An incident is an outage confirmed by N consecutive DOWN probes. It opens when the
+-- target is confirmed down and closes when it recovers. Acknowledgement lives here.
+CREATE TABLE IF NOT EXISTS incidents (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  target_id        INTEGER NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+  started_at       INTEGER NOT NULL,
+  ended_at         INTEGER,
+  cause            TEXT,
+  maintenance      INTEGER NOT NULL DEFAULT 0,
+  notified_at      INTEGER,
+  last_notified_at INTEGER,
+  ack_by           TEXT,
+  ack_at           INTEGER,
+  ack_note         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_incidents_target_started ON incidents(target_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_incidents_open ON incidents(ended_at) WHERE ended_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_incidents_started ON incidents(started_at DESC);
+
+-- Maintenance windows suppress alerts and mark affected targets on the public dashboard.
+-- scope: all | group | target. repeat: none | daily | weekly (same wall-clock offset).
+CREATE TABLE IF NOT EXISTS maintenance_windows (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  scope      TEXT NOT NULL DEFAULT 'all',
+  scope_id   INTEGER,
+  starts_at  INTEGER NOT NULL,
+  ends_at    INTEGER NOT NULL,
+  repeat     TEXT NOT NULL DEFAULT 'none',
+  created_by TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+CREATE INDEX IF NOT EXISTS idx_maintenance_ends ON maintenance_windows(ends_at);
+
+-- Who did what in the admin UI
+CREATE TABLE IF NOT EXISTS audit_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  at         INTEGER NOT NULL DEFAULT (unixepoch()),
+  username   TEXT,
+  ip         TEXT,
+  action     TEXT NOT NULL,
+  detail     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON admin_sessions(expires_at);

@@ -25,7 +25,7 @@ module.exports = async function groupRoutes(app) {
   // POST /api/admin/groups
   app.post('/groups', auth, async (req, reply) => {
     const result = GroupSchema.safeParse(req.body);
-    if (!result.success) return reply.status(400).send({ error: result.error.flatten() });
+    if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message ? `${result.error.issues[0].path.join('.') || 'request'}: ${result.error.issues[0].message}` : 'Invalid request' });
 
     const { name, description, sort_order } = result.data;
     const db = getDb();
@@ -42,7 +42,7 @@ module.exports = async function groupRoutes(app) {
     if (isNaN(id)) return reply.status(400).send({ error: 'Invalid id' });
 
     const result = GroupSchema.safeParse(req.body);
-    if (!result.success) return reply.status(400).send({ error: result.error.flatten() });
+    if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message ? `${result.error.issues[0].path.join('.') || 'request'}: ${result.error.issues[0].message}` : 'Invalid request' });
 
     const { name, description, sort_order } = result.data;
     const db = getDb();
@@ -74,7 +74,7 @@ module.exports = async function groupRoutes(app) {
 
     const { EnabledSchema } = require('../../shared/schemas');
     const result = EnabledSchema.safeParse(req.body);
-    if (!result.success) return reply.status(400).send({ error: result.error.flatten() });
+    if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message ? `${result.error.issues[0].path.join('.') || 'request'}: ${result.error.issues[0].message}` : 'Invalid request' });
 
     const db = getDb();
     if (!db.prepare('SELECT id FROM groups WHERE id = ?').get(id)) {
@@ -92,7 +92,7 @@ module.exports = async function groupRoutes(app) {
     if (isNaN(id)) return reply.status(400).send({ error: 'Invalid id' });
 
     const result = OrderSchema.safeParse(req.body);
-    if (!result.success) return reply.status(400).send({ error: result.error.flatten() });
+    if (!result.success) return reply.status(400).send({ error: result.error.issues[0]?.message ? `${result.error.issues[0].path.join('.') || 'request'}: ${result.error.issues[0].message}` : 'Invalid request' });
 
     const db = getDb();
     const info = db.prepare('UPDATE groups SET sort_order = ? WHERE id = ?').run(result.data.sort_order, id);

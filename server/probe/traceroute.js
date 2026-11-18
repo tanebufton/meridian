@@ -2,6 +2,7 @@
 
 const { spawn } = require('child_process');
 const { promises: dnsPromises } = require('dns');
+const { isSafeHost } = require('../shared/hosts');
 
 const PRIVATE_RANGES = [
   /^10\./,
@@ -68,9 +69,10 @@ async function reverseLookup(ip) {
 
 async function spawnTrace(host, useIPv6 = false) {
   return new Promise((resolve) => {
-    const args = ['-n', '-m', '20', '-w', '2', '-q', '3', host];
-    const cmd = useIPv6 ? 'traceroute6' : 'traceroute';
-    const proc = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    if (!isSafeHost(host)) return resolve({ hops: [], error: 'Invalid host' });
+    // `traceroute -6` instead of the separate traceroute6 binary (absent on newer distros)
+    const args = [...(useIPv6 ? ['-6'] : []), '-n', '-m', '20', '-w', '2', '-q', '3', '--', host];
+    const proc = spawn('traceroute', args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
     let stdout = '';
     let stderr = '';

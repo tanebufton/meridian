@@ -2,46 +2,10 @@
 
 const { getDb } = require('../../db/db');
 const { getStatus } = require('../../shared/constants');
+const { getTargetStates } = require('../../shared/status');
 const { ResultsRangeSchema } = require('../../shared/schemas');
-
-function buildResultsQuery(targetId, range) {
-  const now = Math.floor(Date.now() / 1000);
-  const db = getDb();
-
-  if (range === '1h' || range === '6h' || range === '12h') {
-    const seconds = range === '1h' ? 3600 : range === '6h' ? 21600 : 43200;
-    return db.prepare(
-      `SELECT id, timestamp, latency_min, latency_avg, latency_max, latency_mdev, packet_loss,
-              dns_time, dns_success, resolved_ip, error
-       FROM probe_results
-       WHERE target_id = ? AND timestamp >= ?
-       ORDER BY timestamp ASC`
-    ).all(targetId, now - seconds);
-  }
-
-  if (range === '24h' || range === '7d') {
-    const seconds = range === '24h' ? 86400 : 604800;
-    return db.prepare(
-      `SELECT period_start AS timestamp, latency_min, latency_avg, latency_max,
-              packet_loss, sample_count, NULL AS dns_time, NULL AS dns_success,
-              NULL AS resolved_ip, NULL AS error
-       FROM probe_aggregates
-       WHERE target_id = ? AND resolution = '5min' AND period_start >= ?
-       ORDER BY period_start ASC`
-    ).all(targetId, now - seconds);
-  }
-
-  // 30d / 3mo — 1-hour aggregates
-  const days = range === '3mo' ? 90 : 30;
-  return db.prepare(
-    `SELECT period_start AS timestamp, latency_min, latency_avg, latency_max,
-            packet_loss, sample_count, NULL AS dns_time, NULL AS dns_success,
-            NULL AS resolved_ip, NULL AS error
-     FROM probe_aggregates
-     WHERE target_id = ? AND resolution = '1hour' AND period_start >= ?
-     ORDER BY period_start ASC`
-  ).all(targetId, now - days * 86400);
-}
+const { buildResultsQuery } = require('../../shared/results');
+const { AGG_FAIL } = require('../../shared/sql');
 
 module.exports = async function targetRoutes(app) {
   // GET /api/v1/targets/:id
@@ -60,12 +24,19 @@ module.exports = async function targetRoutes(app) {
       'SELECT latency_avg, packet_loss, dns_success, resolved_ip, error, timestamp FROM probe_results WHERE target_id = ? ORDER BY timestamp DESC LIMIT 1'
     ).get(id);
 
+    const overlay = getTargetStates(db, undefined, id)[0];
+
     return {
       ...target,
       status: latest
         ? getStatus(latest.packet_loss, latest.dns_success, target.probe_type, !!latest.error)
         : 'UNKNOWN',
       latest,
+      in_maintenance: overlay?.in_maintenance ?? false,
+      maintenance_ends_at: overlay?.maintenance_ends_at ?? null,
+      maintenance_name: overlay?.maintenance_name ?? null,
+      incident_started_at: overlay?.incident_started_at ?? null,
+      incident_acknowledged: !!overlay?.incident_ack_at,
     };
   });
 
@@ -82,7 +53,7 @@ module.exports = async function targetRoutes(app) {
       return reply.status(404).send({ error: 'Not found' });
     }
 
-    return { range: rangeResult.data, data: buildResultsQuery(id, rangeResult.data) };
+    return { range: rangeResult.data, data: buildResultsQuery(db, id, rangeResult.data) };
   });
 
   // GET /api/v1/targets/:id/uptime
@@ -106,6 +77,42 @@ module.exports = async function targetRoutes(app) {
     ).get(id) || { latency_min: null, latency_avg: null, latency_max: null };
 
     return { ...uptime, ...stats };
+  });
+
+  // GET /api/v1/targets/:id/availability?days=90 — per-day uptime for the status-page bars.
+  // Days are UTC calendar days built from the hourly aggregates (kept for a year).
+  app.get('/targets/:id/availability', async (req, reply) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id < 1) return reply.status(400).send({ error: 'Invalid id' });
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 90, 1), 365);
+
+    const db = getDb();
+    if (!db.prepare('SELECT id FROM targets WHERE id = ?').get(id)) return reply.status(404).send({ error: 'Not found' });
+
+    const now = Math.floor(Date.now() / 1000);
+    const todayStart = Math.floor(now / 86400) * 86400;
+    const since = todayStart - (days - 1) * 86400;
+    const rows = db.prepare(
+      `SELECT (period_start / 86400) * 86400 AS day,
+              SUM(sample_count) AS samples,
+              SUM(${AGG_FAIL}) AS failed,
+              AVG(latency_avg) AS latency_avg
+       FROM probe_aggregates
+       WHERE target_id = ? AND resolution = '1hour' AND period_start >= ?
+       GROUP BY day ORDER BY day ASC`
+    ).all(id, since);
+
+    const byDay = new Map(rows.map((r) => [r.day, r]));
+    const out = [];
+    for (let d = since; d <= todayStart; d += 86400) {
+      const r = byDay.get(d);
+      out.push({
+        day: d,
+        uptime: r && r.samples ? ((r.samples - r.failed) / r.samples) * 100 : null,
+        latency_avg: r ? r.latency_avg : null,
+      });
+    }
+    return { days, data: out };
   });
 
   // GET /api/v1/targets/:id/traceroute — read cached result only (probe worker writes this)

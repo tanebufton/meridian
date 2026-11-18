@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const { getDb, closeDb } = require('../server/db/db');
 
 function run() {

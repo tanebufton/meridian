@@ -1,69 +1,62 @@
 'use strict';
 
 const { getDb } = require('../../db/db');
-const { getStatus } = require('../../shared/constants');
-const fs = require('fs');
-const path = require('path');
-require('dotenv').config();
-
-const SETTINGS_FILE = path.resolve(
-  process.env.DATABASE_PATH ? path.dirname(process.env.DATABASE_PATH) : './data',
-  'settings.json'
-);
+const { loadSettings } = require('../../shared/settings');
+const { getTargetStates } = require('../../shared/status');
+const { activeWindows } = require('../../shared/maintenance');
 
 function loadBanner() {
-  try {
-    if (fs.existsSync(SETTINGS_FILE)) {
-      const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-      if (s.banner_enabled && s.banner_text) {
-        return { text: s.banner_text, type: s.banner_type || 'info' };
-      }
-    }
-  } catch {}
+  const s = loadSettings();
+  if (s.banner_enabled && s.banner_text) return { text: s.banner_text, type: s.banner_type || 'info' };
   return null;
 }
 
 module.exports = async function summaryRoutes(app) {
-  // GET /api/v1/summary — global stats + sparkline + admin banner
+  // GET /api/v1/summary — global stats + sparkline + banner + maintenance
   app.get('/summary', async () => {
     const db = getDb();
     const now = Math.floor(Date.now() / 1000);
+    const states = getTargetStates(db, now);
 
-    const latestPerTarget = db.prepare(
-      `SELECT t.id, t.probe_type, pr.packet_loss, pr.dns_success, pr.error
-       FROM targets t
-       LEFT JOIN (
-         SELECT target_id, packet_loss, dns_success, error,
-                ROW_NUMBER() OVER (PARTITION BY target_id ORDER BY timestamp DESC) AS rn
-         FROM probe_results
-       ) pr ON pr.target_id = t.id AND pr.rn = 1
-       WHERE t.enabled = 1`
-    ).all();
-
-    let online = 0, degraded = 0, offline = 0;
-    for (const t of latestPerTarget) {
-      const s = getStatus(t.packet_loss, t.dns_success, t.probe_type, !!t.error);
-      if (s === 'UP') online++;
-      else if (s === 'DEGRADED') degraded++;
+    // A target that is down *during maintenance* is expected, so it is counted under
+    // "maintenance" rather than "offline"
+    let online = 0, degraded = 0, offline = 0, maintenance = 0;
+    for (const t of states) {
+      if (t.in_maintenance) maintenance++;
+      else if (t.status === 'UP') online++;
+      else if (t.status === 'DEGRADED') degraded++;
       else offline++;
     }
 
-    const since24h = now - 86400;
     const sparkline = db.prepare(
       `SELECT period_start AS timestamp, AVG(latency_avg) AS latency_avg
        FROM probe_aggregates
        WHERE resolution = '5min' AND period_start >= ?
        GROUP BY period_start
        ORDER BY period_start ASC`
-    ).all(since24h);
+    ).all(now - 86400);
+
+    const windows = activeWindows(db, now).map((w) => ({
+      name: w.name,
+      scope: w.scope,
+      ends_at: w.end,
+      scope_name: w.scope === 'group'
+        ? db.prepare('SELECT name FROM groups WHERE id = ?').get(w.scope_id)?.name ?? null
+        : w.scope === 'target'
+          ? db.prepare('SELECT name FROM targets WHERE id = ?').get(w.scope_id)?.name ?? null
+          : null,
+    }));
 
     return {
-      total: latestPerTarget.length,
+      total: states.length,
       online,
       degraded,
       offline,
+      maintenance,
+      open_incidents: states.filter((t) => t.incident_id && !t.in_maintenance).length,
       sparkline,
       banner: loadBanner(),
+      maintenance_windows: windows,
     };
   });
 };

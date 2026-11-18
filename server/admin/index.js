@@ -1,22 +1,34 @@
 'use strict';
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const path = require('path');
 const fastify = require('fastify');
-const { closeDb } = require('../db/db');
+const { closeDb, requireSchema } = require('../db/db');
 const { validateSession, generateCsrfToken, validateCsrf } = require('./auth');
+const { audit } = require('./audit');
+const { trustedProxies } = require('../shared/proxy');
 
 const app = fastify({
   logger: {
     level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+    // Never log request bodies, cookies or auth headers
+    serializers: { req: (req) => ({ method: req.method, url: req.url, ip: req.ip }) },
   },
+  // When reached through the Cloudflare Tunnel, req.ip must be the real client or every
+  // visitor shares one login-throttle bucket (and the audit log records 127.0.0.1)
+  trustProxy: trustedProxies(),
 });
 
-// Decorate request with session
 app.decorateRequest('session', null);
 
+const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 async function start() {
+  requireSchema();
+
   await app.register(require('@fastify/helmet'), {
+    // No HSTS: the admin UI is also served over plain HTTP on the LAN, and a cached HSTS
+    // policy would force HTTPS on every later visit and break it. Same for COOP.
     hsts: false,
     crossOriginOpenerPolicy: false,
     contentSecurityPolicy: {
@@ -28,13 +40,10 @@ async function start() {
         connectSrc: ["'self'"],
         frameAncestors: ["'none'"],
         objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
       },
     },
-    // HSTS must be disabled — server is HTTP on LAN. If enabled (even by default)
-    // the browser caches it and forces HTTPS on all future visits, breaking the UI.
-    hsts: false,
-    // Same reason — COOP is only meaningful on secure origins
-    crossOriginOpenerPolicy: false,
   });
 
   await app.register(require('@fastify/cookie'));
@@ -45,18 +54,16 @@ async function start() {
     keyGenerator: (req) => req.ip,
   });
 
-  // Auth middleware — runs on every request (auth routes handle their own logic)
+  // Session + CSRF cookie on every request
   app.addHook('preHandler', async (req, reply) => {
     const token = req.cookies && req.cookies.session_token;
-    if (token) {
-      req.session = validateSession(token);
-    }
+    if (token) req.session = validateSession(token);
 
-    // Issue or refresh CSRF cookie on each response
     if (!req.cookies || !req.cookies.csrf_token) {
       reply.setCookie('csrf_token', generateCsrfToken(), {
         httpOnly: false, // must be readable by JS for double-submit
         sameSite: 'Strict',
+        secure: req.protocol === 'https',
         path: '/',
       });
     }
@@ -64,16 +71,22 @@ async function start() {
 
   // CSRF enforcement for state-changing admin API routes
   app.addHook('preHandler', async (req, reply) => {
-    const method = req.method.toUpperCase();
-    const isStateChanging = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
     const isAdminApi = req.url.startsWith('/api/admin/');
-    const isLoginRoute = req.url === '/api/admin/auth/login';
-
-    if (isAdminApi && isStateChanging && !isLoginRoute) {
-      if (!validateCsrf(req)) {
-        return reply.status(403).send({ error: 'Invalid CSRF token' });
-      }
+    const isLoginRoute = req.url === '/api/admin/auth/login' || req.url === '/api/admin/auth/login/2fa';
+    if (isAdminApi && MUTATING.has(req.method.toUpperCase()) && !isLoginRoute && !validateCsrf(req)) {
+      return reply.status(403).send({ error: 'Invalid CSRF token' });
     }
+  });
+
+  // Audit trail: every successful admin change is recorded with who/when/from where.
+  // Bodies are deliberately NOT logged (they can contain passwords and webhook secrets).
+  // Auth routes record their own, more specific entries.
+  app.addHook('onResponse', async (req, reply) => {
+    if (!MUTATING.has(req.method) || !req.url.startsWith('/api/admin/') || reply.statusCode >= 400) return;
+    const route = (req.routeOptions && req.routeOptions.url) || req.url.split('?')[0];
+    if (route.startsWith('/api/admin/auth/')) return;
+    const params = req.params && Object.keys(req.params).length ? req.params : null;
+    audit(req, `${req.method} ${route.replace('/api/admin', '')}`, params);
   });
 
   // Static files — admin SPA
@@ -82,27 +95,35 @@ async function start() {
     prefix: '/',
   });
 
-  // API routes
   await app.register(require('./routes/health'), { prefix: '' });
-  await app.register(require('./routes/auth'), { prefix: '/api/admin' });
-  await app.register(require('./routes/groups'), { prefix: '/api/admin' });
-  await app.register(require('./routes/targets'), { prefix: '/api/admin' });
-  await app.register(require('./routes/users'), { prefix: '/api/admin' });
-  await app.register(require('./routes/settings'), { prefix: '/api/admin' });
-  await app.register(require('./routes/config'), { prefix: '/api/admin' });
-  await app.register(require('./routes/notifications'), { prefix: '/api/admin' });
+  await app.register(require('./routes/metrics'), { prefix: '' });
+  for (const r of ['auth', 'groups', 'targets', 'users', 'settings', 'config', 'notifications', 'maintenance', 'incidents', 'audit']) {
+    await app.register(require(`./routes/${r}`), { prefix: '/api/admin' });
+  }
 
   // SPA fallback
   app.setNotFoundHandler(async (req, reply) => {
-    if (req.url.startsWith('/api/')) {
+    if (req.url.startsWith('/api/') || req.url === '/metrics') {
       return reply.status(404).send({ error: 'Not found' });
     }
     return reply.sendFile('index.html');
   });
 
+  app.setErrorHandler(async (err, req, reply) => {
+    const status = err.statusCode || err.status || 500;
+    if (status >= 500) {
+      app.log.error({ err, url: req.url }, 'Request error');
+      return reply.status(500).send({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message });
+    }
+    return reply.status(status).send({ error: err.message });
+  });
+
   const port = parseInt(process.env.ADMIN_PORT || '3002', 10);
-  await app.listen({ port, host: '0.0.0.0' });
-  app.log.info(`Admin server listening on 0.0.0.0:${port}`);
+  // 0.0.0.0 keeps existing LAN/Tailscale access working; set ADMIN_HOST=127.0.0.1 to
+  // restrict the admin UI to the Cloudflare Tunnel / local access only
+  const host = process.env.ADMIN_HOST || '0.0.0.0';
+  await app.listen({ port, host });
+  app.log.info(`Admin server listening on ${host}:${port}`);
 }
 
 async function shutdown() {

@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useTargets, useGroups, useMutate, apiFetch } from '../hooks/useApi';
 import Toggle from '../components/Toggle';
 import Toast from '../components/Toast';
-import TargetModal from '../components/TargetModal';
+import TargetModal, { LAST_GROUP_KEY } from '../components/TargetModal';
+import { useConfirm } from '../components/ConfirmDialog';
+import { PROBE_TYPES } from '../lib';
 import { useToast } from '../hooks/useToast';
 
 const ALL_STATUSES = ['UP', 'DEGRADED', 'DOWN', 'UNKNOWN'];
@@ -32,7 +34,9 @@ function BulkModal({ groups, onSave, onClose }) {
   const [text, setText] = useState('');
   const mut = useMutate(['admin-targets']);
 
+  const [error, setError] = useState('');
   const parsed = parseBulkLines(text);
+  const typeInfo = PROBE_TYPES.find((t) => t.value === probeType) || PROBE_TYPES[0];
 
   function handleGroupChange(v) {
     setGroupId(v);
@@ -51,11 +55,12 @@ function BulkModal({ groups, onSave, onClose }) {
       packet_count: Number(packetCount),
       enabled: 1,
     }));
+    setError('');
     try {
       await mut.mutateAsync({ url: '/api/admin/targets/bulk', method: 'POST', body: { targets } });
       onSave(parsed.length);
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
     }
   }
 
@@ -64,6 +69,7 @@ function BulkModal({ groups, onSave, onClose }) {
       <div className="modal" style={{ maxWidth: 560 }}>
         <div className="modal-title">Bulk Add Targets</div>
         <form onSubmit={submit}>
+          {error && <div className="error-msg" role="alert">{error}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="field">
               <label>Group</label>
@@ -75,15 +81,14 @@ function BulkModal({ groups, onSave, onClose }) {
             <div className="field">
               <label>Probe Type</label>
               <select value={probeType} onChange={(e) => setProbeType(e.target.value)}>
-                <option value="icmp">ICMP (ping)</option>
-                <option value="dns">DNS resolution</option>
+                {PROBE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
             <div className="field">
               <label>Interval (seconds)</label>
               <input type="number" min={5} max={3600} value={interval} onChange={(e) => setInterval(e.target.value)} />
             </div>
-            {probeType === 'icmp' && (
+            {(probeType === 'icmp' || probeType === 'icmp6' || probeType === 'tcp') && (
               <div className="field">
                 <label>Packet Count</label>
                 <input type="number" min={1} max={100} value={packetCount} onChange={(e) => setPacketCount(e.target.value)} />
@@ -97,7 +102,7 @@ function BulkModal({ groups, onSave, onClose }) {
               rows={10}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder={'8.8.8.8\n1.1.1.1\nMy Router : 192.168.1.1\ngoogle.com'}
+              placeholder={`${typeInfo.example}\nMy Server : ${typeInfo.example}`}
               style={{ fontFamily: 'monospace', fontSize: 12, resize: 'vertical' }}
             />
           </div>
@@ -132,6 +137,7 @@ export default function Targets() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [runningTrace, setRunningTrace] = useState(new Set());
+  const ask = useConfirm();
   const toggleMut = useMutate(['admin-targets']);
   const deleteMut = useMutate(['admin-targets']);
 
@@ -153,7 +159,7 @@ export default function Targets() {
   }
 
   async function deleteTarget(t) {
-    if (!confirm(`Delete target "${t.name}"?`)) return;
+    if (!(await ask({ title: `Delete "${t.name}"?`, message: 'The target and ALL of its probe history will be permanently deleted. To just stop probing it, disable it instead.', confirmLabel: 'Delete target', danger: true }))) return;
     try {
       await deleteMut.mutateAsync({ url: `/api/admin/targets/${t.id}`, method: 'DELETE' });
       toast('Target deleted');
@@ -162,7 +168,7 @@ export default function Targets() {
 
   async function deleteSelected() {
     const ids = [...selected];
-    if (!confirm(`Delete ${ids.length} target${ids.length !== 1 ? 's' : ''}?`)) return;
+    if (!(await ask({ title: `Delete ${ids.length} target${ids.length !== 1 ? 's' : ''}?`, message: 'They and ALL of their probe history will be permanently deleted.', confirmLabel: `Delete ${ids.length}`, danger: true }))) return;
     const count = ids.length;
     try {
       await Promise.all(ids.map((id) => deleteMut.mutateAsync({ url: `/api/admin/targets/${id}`, method: 'DELETE' })));
@@ -307,7 +313,11 @@ export default function Targets() {
                 <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{t.host}</td>
                 <td style={{ textTransform: 'uppercase', fontSize: 11 }}>{t.probe_type}</td>
                 <td>{t.interval_seconds}s</td>
-                <td><span className={`badge ${STATUS_CLASS[t.status] || 'badge-unknown'}`}>{t.status}</span></td>
+                <td>
+                  <span className={`badge ${STATUS_CLASS[t.status] || 'badge-unknown'}`}>{t.status}</span>
+                  {t.in_maintenance && <span className="badge badge-maint" style={{ marginLeft: 6 }}>maintenance</span>}
+                  {t.incident_acknowledged && <span className="badge badge-ack" style={{ marginLeft: 6 }}>ack</span>}
+                </td>
                 <td><Toggle checked={!!t.enabled} onChange={() => toggleEnabled(t)} /></td>
                 <td>
                   <div style={{ display: 'flex', gap: 6 }}>

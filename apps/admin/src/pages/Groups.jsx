@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useGroups, useMutate } from '../hooks/useApi';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
+import { useConfirm } from '../components/ConfirmDialog';
 
 const EMPTY = { name: '', description: '', sort_order: 0 };
 
 function GroupModal({ group, onSave, onClose }) {
   const [form, setForm] = useState(group || EMPTY);
+  const [error, setError] = useState('');
   const mut = useMutate(['admin-groups']);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
@@ -20,7 +22,7 @@ function GroupModal({ group, onSave, onClose }) {
         await mut.mutateAsync({ url: '/api/admin/groups', method: 'POST', body: { ...form, sort_order: Number(form.sort_order) } });
       }
       onSave();
-    } catch (err) { alert(err.message); }
+    } catch (err) { setError(err.message); }
   }
 
   return (
@@ -28,6 +30,7 @@ function GroupModal({ group, onSave, onClose }) {
       <div className="modal">
         <div className="modal-title">{group ? 'Edit Group' : 'New Group'}</div>
         <form onSubmit={submit}>
+          {error && <div className="error-msg" role="alert">{error}</div>}
           <div className="field"><label>Name</label><input value={form.name} onChange={(e) => set('name', e.target.value)} required /></div>
           <div className="field"><label>Description</label><input value={form.description || ''} onChange={(e) => set('description', e.target.value)} /></div>
           <div className="modal-actions">
@@ -47,6 +50,7 @@ export default function Groups() {
   const [adding, setAdding] = useState(false);
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
+  const ask = useConfirm();
   const deleteMut = useMutate(['admin-groups']);
   const orderMut = useMutate(['admin-groups']);
   const enableMut = useMutate(['admin-groups']);
@@ -56,7 +60,11 @@ export default function Groups() {
   const sorted = [...(groups.data || [])].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
 
   async function deleteGroup(g) {
-    if (!confirm(`Delete group "${g.name}"? All targets in this group will also be deleted.`)) return;
+    if (!(await ask({
+      title: `Delete group "${g.name}"?`,
+      message: `Every target in this group, and all of their probe history, will be permanently deleted.`,
+      confirmLabel: 'Delete group', danger: true,
+    }))) return;
     try {
       await deleteMut.mutateAsync({ url: `/api/admin/groups/${g.id}`, method: 'DELETE' });
       toast('Group deleted');

@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import {
-  ComposedChart, Line, BarChart, Bar,
-  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Customized,
-} from 'recharts';
-import { useTarget, useTargetResults, useGroups, useTraceroute, useTracerouteHistory } from '../hooks/useApi';
+  useTarget, useTargetResults, useGroups, useTraceroute, useTracerouteHistory,
+  useTargetUptime, useTargetIncidents, useAvailability,
+} from '../hooks/useApi';
+import LatencyChart, { fmtTsAxis } from '../components/LatencyChart';
+import StatusBadge from '../components/StatusBadge';
+import { fmtDuration } from '../lib';
 
 const RANGES = ['1h', '6h', '12h', '24h', '7d', '30d', '3mo'];
 
@@ -15,114 +18,6 @@ function fmt(val, unit = 'ms') {
 function fmtTs(ts) {
   if (!ts) return '—';
   return new Date(ts * 1000).toLocaleString();
-}
-
-// Range-aware axis label — short ranges show HH:MM, multi-day show "Jan 15" or "Mon 14:00"
-function fmtTsAxis(ts, range) {
-  if (!ts) return '';
-  const d = new Date(ts * 1000);
-  if (range === '1h' || range === '6h' || range === '12h' || range === '24h') {
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  if (range === '7d') {
-    return d.toLocaleDateString([], { weekday: 'short', hour: '2-digit' });
-  }
-  // 30d, 3mo
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
-// Renders the min→max spread band as a polygon — Smokeping style.
-// Splits into segments at loss gaps so the band breaks cleanly.
-function SpreadBand({ xAxisMap, yAxisMap, probeData }) {
-  const chartData = probeData;
-  const xScale = Object.values(xAxisMap || {})[0]?.scale;
-  const yScale = Object.values(yAxisMap || {})[0]?.scale;
-  if (!xScale || !yScale) return null;
-
-  const segments = [];
-  let cur = [];
-  for (const d of chartData) {
-    if (d.max != null && d.min != null) {
-      cur.push(d);
-    } else if (cur.length > 0) {
-      segments.push([...cur]);
-      cur = [];
-    }
-  }
-  if (cur.length > 0) segments.push(cur);
-
-  return (
-    <g>
-      {segments.map((seg, i) => {
-        const top = seg.map((d) => `${xScale(d.ts).toFixed(1)},${yScale(d.max).toFixed(1)}`).join(' ');
-        const btm = [...seg].reverse().map((d) => `${xScale(d.ts).toFixed(1)},${yScale(d.min).toFixed(1)}`).join(' ');
-        return (
-          <g key={i}>
-            <polygon points={`${top} ${btm}`} fill="#7b61ff" fillOpacity={0.18} stroke="none" />
-            <polyline points={top} fill="none" stroke="#7b61ff" strokeOpacity={0.4} strokeWidth={0.75} />
-          </g>
-        );
-      })}
-    </g>
-  );
-}
-
-function LatencyChart({ data, probeType, range }) {
-  if (!data || data.length === 0) {
-    return (
-      <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
-        No data for this time range
-      </div>
-    );
-  }
-
-  const isDns = probeType === 'dns';
-
-  // chartData: only fields Recharts reads for series/domain.
-  const chartData = data.map((d) => {
-    const totalLoss = d.packet_loss >= 100;
-    return {
-      ts: d.timestamp,
-      avg: isDns ? d.dns_time : (totalLoss ? null : d.latency_avg),
-      min: isDns || totalLoss ? null : d.latency_min,
-      max: isDns || totalLoss ? null : d.latency_max,
-    };
-  });
-
-  // probeData: for the spread band polygon (min→max).
-  const probeData = data.map((d) => {
-    const totalLoss = d.packet_loss >= 100;
-    return {
-      ts: d.timestamp,
-      min: isDns || totalLoss ? null : d.latency_min,
-      max: isDns || totalLoss ? null : d.latency_max,
-    };
-  });
-
-  return (
-    <ResponsiveContainer width="100%" height={220}>
-      <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-        <XAxis dataKey="ts" type="number" domain={['dataMin', 'dataMax']}
-               tickFormatter={(ts) => fmtTsAxis(ts, range)}
-               tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickCount={6} />
-        <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} unit="ms" width={48} />
-        <Tooltip
-          contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 }}
-          labelFormatter={(v) => fmtTs(v)}
-          formatter={(val, name) => [val !== null ? `${Number(val).toFixed(1)}ms` : '—', name]}
-        />
-        {/* Hidden series so Recharts includes min/max in the Y-axis domain */}
-        {!isDns && <Line dataKey="min" stroke="none" dot={false} legendType="none" tooltipType="none" connectNulls={false} />}
-        {!isDns && <Line dataKey="max" stroke="none" dot={false} legendType="none" tooltipType="none" connectNulls={false} />}
-        {/* 1 — Spread band (min→max polygon), behind the avg line */}
-        {!isDns && <Customized component={(props) => <SpreadBand {...props} probeData={probeData} />} />}
-        {/* 2 — Avg/median trend line */}
-        <Line type="monotone" dataKey="avg" stroke="#7b61ff" dot={false} strokeWidth={2}
-              name={isDns ? 'DNS time' : 'Avg'} connectNulls={false} />
-      </ComposedChart>
-    </ResponsiveContainer>
-  );
 }
 
 function LossChart({ data, probeType, range }) {
@@ -295,6 +190,99 @@ function TraceroutePanel({ targetId }) {
   );
 }
 
+
+// 90-day availability, one bar per UTC day — the status-page staple
+function AvailabilityBars({ targetId }) {
+  const q = useAvailability(targetId, 90);
+  if (q.isLoading) return null;
+  const days = q.data?.data || [];
+  if (!days.some((d) => d.uptime != null)) return null;
+  const color = (u) => (u == null ? 'var(--border)' : u >= 99.9 ? 'var(--success)' : u >= 99 ? '#84cc16' : u >= 95 ? 'var(--warning)' : 'var(--danger)');
+  const known = days.filter((d) => d.uptime != null);
+  const avg = known.reduce((n, d) => n + d.uptime, 0) / known.length;
+  return (
+    <div className="chart-card" style={{ marginTop: 14 }}>
+      <div className="chart-card-title" style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <span>Last {days.length} days</span><span style={{ textTransform: 'none', letterSpacing: 0 }}>{avg.toFixed(avg >= 99.95 ? 2 : 1)}% average</span>
+      </div>
+      <div className="avail-bars" role="img" aria-label={`Daily availability over the last ${days.length} days`}>
+        {days.map((d) => (
+          <span key={d.day} className="avail-bar" style={{ background: color(d.uptime) }}
+            title={`${new Date(d.day * 1000).toLocaleDateString([], { month: 'short', day: 'numeric', timeZone: 'UTC' })}: ${d.uptime == null ? 'no data' : `${d.uptime.toFixed(2)}% up`}`} />
+        ))}
+      </div>
+      <div className="avail-legend"><span>{days.length} days ago</span><span>Today</span></div>
+    </div>
+  );
+}
+
+function UptimeChips({ targetId }) {
+  const q = useTargetUptime(targetId);
+  if (!q.data) return null;
+  const chip = (label, v) => (
+    <div className="uptime-chip">
+      <div className="uptime-pct" style={{ color: v == null ? 'var(--text-muted)' : v >= 99.9 ? 'var(--success)' : v >= 99 ? 'var(--warning)' : 'var(--danger)' }}>
+        {v == null ? '—' : `${v.toFixed(v >= 99.95 ? 2 : 1)}%`}
+      </div>
+      <div className="uptime-label">{label}</div>
+    </div>
+  );
+  return <>{chip('Uptime 24h', q.data.uptime_24h)}{chip('7d', q.data.uptime_7d)}{chip('30d', q.data.uptime_30d)}</>;
+}
+
+function IncidentList({ targetId }) {
+  const q = useTargetIncidents(targetId);
+  const list = (q.data?.incidents || []).slice(0, 8);
+  if (list.length === 0) return null;
+  return (
+    <div className="chart-card" style={{ marginTop: 14 }}>
+      <div className="chart-card-title">Recent incidents</div>
+      {list.map((i) => (
+        <div key={i.id} className="incident-row static">
+          <span className={`incident-dot ${i.ongoing ? 'down' : 'ok'}`} />
+          <span className="incident-name">{i.ongoing ? 'Ongoing' : 'Resolved'}{i.during_maintenance && <span className="badge badge-maint" style={{ marginLeft: 8 }}>maintenance</span>}</span>
+          <span className="muted">{fmtDuration(i.duration_seconds)} · {fmtTs(i.started_at)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Tools({ target, rows, range }) {
+  const [copied, setCopied] = useState('');
+  const origin = window.location.origin;
+  const badge = `${origin}/badge/${target.id}.svg`;
+
+  function csv() {
+    const head = 'timestamp_iso,latency_min_ms,latency_avg_ms,latency_max_ms,packet_loss_pct,dns_time_ms\n';
+    const num = (v) => (v == null ? '' : v);
+    const body = rows.map((d) => [new Date(d.timestamp * 1000).toISOString(), num(d.latency_min), num(d.latency_avg), num(d.latency_max), num(d.packet_loss), num(d.dns_time)].join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([head + body + '\n'], { type: 'text/csv' }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: `${target.name.replace(/[^\w.-]+/g, '_')}-${range}.csv` });
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }
+  async function copy(key, text) {
+    try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied(''), 1800); } catch { /* clipboard unavailable */ }
+  }
+
+  return (
+    <details className="chart-card tools" style={{ marginTop: 14 }}>
+      <summary>Share &amp; export</summary>
+      <div className="tools-body">
+        <div className="tools-row">
+          <button className="chip-btn" onClick={csv} disabled={!rows.length}>Download CSV ({range})</button>
+          <button className="chip-btn" onClick={() => copy('link', window.location.href)}>{copied === 'link' ? 'Copied ✓' : 'Copy link'}</button>
+        </div>
+        <div className="tools-badge">
+          <img src={`/badge/${target.id}.svg`} alt={`${target.name} status badge`} height="20" />
+          <button className="chip-btn" onClick={() => copy('md', `![${target.name}](${badge})`)}>{copied === 'md' ? 'Copied ✓' : 'Copy Markdown'}</button>
+          <button className="chip-btn" onClick={() => copy('html', `<img src="${badge}" alt="${target.name} status">`)}>{copied === 'html' ? 'Copied ✓' : 'Copy HTML'}</button>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 export default function TargetDetail() {
   const { id } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -330,7 +318,7 @@ export default function TargetDetail() {
       {/* Header */}
       <div className="detail-header">
         <div>
-          <div className="detail-title">{t.name}</div>
+          <div className="detail-title">{t.name} <StatusBadge status={t.in_maintenance ? 'MAINTENANCE' : t.status} /></div>
           <div className="detail-meta">
             <span style={{ fontFamily: 'monospace' }}>{t.host}</span>
             <span>{t.probe_type.toUpperCase()}</span>
@@ -341,6 +329,18 @@ export default function TargetDetail() {
           </div>
         </div>
       </div>
+
+      {t.in_maintenance && (
+        <div className="banner" style={{ border: '1px solid rgba(139,92,246,0.35)', background: 'rgba(139,92,246,0.08)', color: 'var(--maint)' }}>
+          <strong>Scheduled maintenance{t.maintenance_name ? `: ${t.maintenance_name}` : ''}.</strong>{' '}
+          {t.maintenance_ends_at ? `Expected to finish around ${new Date(t.maintenance_ends_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.` : ''}
+        </div>
+      )}
+      {!t.in_maintenance && t.incident_started_at && (
+        <div className="banner" style={{ border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.08)', color: 'var(--danger)' }}>
+          <strong>Currently down</strong> — for {fmtDuration(Math.floor(Date.now() / 1000) - t.incident_started_at)}.{t.incident_acknowledged ? ' Someone is looking into it.' : ''}
+        </div>
+      )}
 
       {/* Notes */}
       {t.notes && (
@@ -370,6 +370,7 @@ export default function TargetDetail() {
               <div className="uptime-pct" style={{ color: 'var(--warning)' }}>{maxL != null ? `${maxL.toFixed(1)}ms` : '—'}</div>
               <div className="uptime-label">Max</div>
             </div>
+            <UptimeChips targetId={id} />
           </div>
         );
       })()}
@@ -394,6 +395,10 @@ export default function TargetDetail() {
         <div className="chart-card-title">{t.probe_type === 'dns' ? 'DNS Failures' : 'Packet Loss (%)'}</div>
         {results.isLoading ? null : <LossChart data={results.data?.data} probeType={t.probe_type} range={range} />}
       </div>
+
+      <AvailabilityBars targetId={id} />
+      <IncidentList targetId={id} />
+      <Tools target={t} rows={results.data?.data || []} range={range} />
 
       {/* Traceroute */}
       <TraceroutePanel targetId={id} />

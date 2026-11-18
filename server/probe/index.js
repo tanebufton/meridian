@@ -1,24 +1,26 @@
 'use strict';
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const pino = require('pino');
-const { getDb, closeDb } = require('../db/db');
+const { getDb, closeDb, requireSchema } = require('../db/db');
 const { pingHost, ping6Host } = require('./icmp');
 const { resolveHost } = require('./dns');
+const { tcpProbe } = require('./tcp');
+const { httpProbe } = require('./http');
 const { recalcUptime } = require('./uptime');
 const { rollup5Min, rollup1Hour, runRetention, backfillAggregates } = require('./rollup');
-const { runTraceroute } = require('./traceroute');
 const { runTracerouteBackfill } = require('./traceroute-backfill');
 const { getStatus } = require('../shared/constants');
+const { loadSettings } = require('../shared/settings');
+const maintenance = require('../shared/maintenance');
+const incidents = require('./incidents');
 const { fireStatusChange } = require('./notifier');
-const fs = require('fs');
-const path = require('path');
 
 const logger = pino({
   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
 });
 
-// Limits the number of ping processes running at the same time.
+// Limits the number of probe processes/sockets running at the same time.
 // With 143 targets at 300s intervals and ~22s per probe, average concurrency
 // is ~10. Cap at 15 to prevent thundering-herd spikes on startup/reload.
 class Semaphore {
@@ -37,96 +39,67 @@ class Semaphore {
   }
 }
 
-const probeSemaphore = new Semaphore(15);
+const probeSemaphore = new Semaphore(parseInt(process.env.PROBE_CONCURRENCY || '15', 10));
 
-// Active probe intervals, keyed by target id
+// Scheduler state, keyed by target id: { target, timer, interval, sig, running }
 const activeProbes = new Map();
 let isShuttingDown = false;
 let inFlightCount = 0;
 
-function loadSettings() {
-  const settingsFile = path.resolve(
-    process.env.DATABASE_PATH ? path.dirname(process.env.DATABASE_PATH) : './data',
-    'settings.json'
-  );
-  const defaults = {
-    retention_raw_days: parseInt(process.env.RETENTION_RAW_DAYS || '7', 10),
-    retention_5min_days: parseInt(process.env.RETENTION_5MIN_DAYS || '30', 10),
-    retention_1hour_days: parseInt(process.env.RETENTION_1HOUR_DAYS || '365', 10),
-  };
-  if (fs.existsSync(settingsFile)) {
-    try { return { ...defaults, ...JSON.parse(fs.readFileSync(settingsFile, 'utf8')) }; }
-    catch { return defaults; }
+// ── Probe execution ─────────────────────────────────────────────────────────
+
+const LATENCY_COLS = `(target_id, latency_min, latency_avg, latency_max, latency_mdev, packet_loss, rtts_json, resolved_ip, error)`;
+
+async function execute(target) {
+  switch (target.probe_type) {
+    case 'icmp':  return { kind: 'latency', result: await pingHost(target.host, target.packet_count) };
+    case 'icmp6': return { kind: 'latency', result: await ping6Host(target.host, target.packet_count) };
+    case 'tcp':   return { kind: 'latency', result: await tcpProbe(target.host, target.packet_count) };
+    case 'http':  return { kind: 'latency', result: await httpProbe(target.host) };
+    case 'dns':   return { kind: 'dns', result: await resolveHost(target.host) };
+    default:      throw new Error(`Unknown probe type: ${target.probe_type}`);
   }
-  return defaults;
 }
 
-async function runProbe(target) {
-  if (isShuttingDown) return;
+async function runProbe(entry) {
+  if (isShuttingDown || entry.running) return; // never stack probes for one target
+  entry.running = true;
   await probeSemaphore.acquire();
   inFlightCount++;
+  const target = entry.target;
   try {
     const db = getDb();
-    let result;
+    const { kind, result } = await execute(target);
 
-    // Snapshot previous status before this probe for change detection
-    const prevRow = db.prepare(
-      'SELECT packet_loss, dns_success, error FROM probe_results WHERE target_id = ? ORDER BY timestamp DESC LIMIT 1'
-    ).get(target.id);
-    const prevStatus = prevRow
-      ? getStatus(prevRow.packet_loss ?? null, prevRow.dns_success ?? null, target.probe_type, !!prevRow.error)
-      : null;
-
-    if (target.probe_type === 'icmp' || target.probe_type === 'icmp6') {
-      result = target.probe_type === 'icmp6'
-        ? await ping6Host(target.host, target.packet_count)
-        : await pingHost(target.host, target.packet_count);
-      db.prepare(
-        `INSERT INTO probe_results
-           (target_id, latency_min, latency_avg, latency_max, latency_mdev, packet_loss, rtts_json, resolved_ip, error)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        target.id,
-        result.latency_min,
-        result.latency_avg,
-        result.latency_max,
-        result.latency_mdev,
-        result.packet_loss,
-        JSON.stringify(result.rtts),
-        result.resolved_ip ?? null,
-        result.error,
+    if (kind === 'latency') {
+      db.prepare(`INSERT INTO probe_results ${LATENCY_COLS} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        target.id, result.latency_min, result.latency_avg, result.latency_max, result.latency_mdev,
+        result.packet_loss, JSON.stringify(result.rtts), result.resolved_ip ?? null, result.error,
       );
     } else {
-      result = await resolveHost(target.host);
       db.prepare(
-        `INSERT INTO probe_results (target_id, dns_time, dns_success, resolved_ip, error)
-         VALUES (?, ?, ?, ?, ?)`
+        `INSERT INTO probe_results (target_id, dns_time, dns_success, resolved_ip, error) VALUES (?, ?, ?, ?, ?)`
       ).run(target.id, result.dns_time, result.dns_success, result.resolved_ip, result.error);
     }
 
     recalcUptime(target.id, target.probe_type);
 
-    // Fire notification on DOWN or recovery to UP
-    const newStatus = getStatus(
-      result.packet_loss ?? null,
-      result.dns_success ?? null,
-      target.probe_type,
-      !!result.error
-    );
-    // Notify on DOWN (any → DOWN) or recovery from DOWN only (DEGRADED→UP is silent)
-    const shouldNotify = prevStatus !== null
-      && prevStatus !== newStatus
-      && newStatus !== 'UNKNOWN'
-      && (newStatus === 'DOWN' || (newStatus === 'UP' && prevStatus === 'DOWN'));
+    const now = Math.floor(Date.now() / 1000);
+    const newStatus = getStatus(result.packet_loss ?? null, result.dns_success ?? null, target.probe_type, !!result.error);
+    const inMaintenance = maintenance.activeFor(db, target, now) != null;
 
-    if (shouldNotify) {
+    const events = incidents.evaluate(db, target, newStatus, loadSettings(), { now, inMaintenance });
+    for (const ev of events) {
+      logger.info({ targetId: target.id, event: ev.kind, incidentId: ev.incidentId }, 'Incident event');
       fireStatusChange({
+        kind: ev.kind,
         targetId: target.id,
         name: target.name,
         host: target.host,
         groupName: target.group_name,
-        prevStatus,
-        newStatus,
+        incidentId: ev.incidentId,
+        durationSeconds: ev.durationSeconds,
+        cause: ev.cause,
       }).catch((err) => logger.warn({ err, targetId: target.id }, 'Notification dispatch failed'));
     }
 
@@ -135,32 +108,30 @@ async function runProbe(target) {
     logger.error({ err, targetId: target.id }, 'Probe error');
   } finally {
     inFlightCount--;
+    entry.running = false;
     probeSemaphore.release();
   }
 }
 
-function scheduleTarget(target, delayMs = 0) {
-  const existing = activeProbes.get(target.id);
-  if (existing) {
-    clearInterval(existing.interval);
-    clearTimeout(existing.timer);
-  }
+// ── Scheduling ──────────────────────────────────────────────────────────────
 
-  const intervalMs = (target.interval_seconds || 60) * 1000;
+function stopEntry(entry) {
+  clearInterval(entry.interval);
+  clearTimeout(entry.timer);
+}
 
-  const timer = setTimeout(() => {
-    runProbe(target);
-    const interval = setInterval(() => runProbe(target), intervalMs);
-    activeProbes.set(target.id, { interval, target });
+function startEntry(entry, delayMs) {
+  const intervalMs = entry.target.interval_seconds * 1000;
+  entry.timer = setTimeout(() => {
+    runProbe(entry);
+    entry.interval = setInterval(() => runProbe(entry), intervalMs);
   }, delayMs);
-
-  activeProbes.set(target.id, { timer, target });
 }
 
 function loadAndScheduleTargets() {
   const db = getDb();
   const targets = db.prepare(
-    `SELECT t.id, t.host, t.probe_type, t.interval_seconds, t.packet_count, t.name,
+    `SELECT t.id, t.group_id, t.host, t.probe_type, t.interval_seconds, t.packet_count, t.name,
             g.name AS group_name
      FROM targets t
      JOIN groups g ON g.id = t.group_id
@@ -171,37 +142,52 @@ function loadAndScheduleTargets() {
 
   for (const [id, entry] of activeProbes.entries()) {
     if (!currentIds.has(id)) {
-      clearInterval(entry.interval);
-      clearTimeout(entry.timer);
+      stopEntry(entry);
       activeProbes.delete(id);
       logger.info({ targetId: id }, 'Target removed from scheduler');
     }
   }
 
-  const toSchedule = targets.filter((t) => {
-    const existing = activeProbes.get(t.id);
-    if (!existing) return true;
-    return existing.target.interval_seconds !== t.interval_seconds;
-  });
+  const closed = incidents.closeForDisabled(db, Math.floor(Date.now() / 1000));
+  if (closed > 0) logger.info({ closed }, 'Closed incidents for disabled targets');
 
-  const brandNew = toSchedule.filter((t) => !activeProbes.has(t.id));
+  const toStart = [];
+  const brandNew = [];
+  for (const t of targets) {
+    const entry = activeProbes.get(t.id);
+    if (!entry) { toStart.push(t); brandNew.push(t); continue; }
 
-  if (toSchedule.length === 0) return;
+    const timingChanged = entry.target.interval_seconds !== t.interval_seconds;
+    // Always adopt the latest definition (host, packet count, type, name, group) —
+    // previously only an interval change was noticed, so other edits were ignored.
+    // The running interval picks it up on its next tick.
+    const changed = entry.target.host !== t.host || entry.target.probe_type !== t.probe_type
+      || entry.target.packet_count !== t.packet_count;
+    entry.target = t;
+    if (timingChanged) {
+      stopEntry(entry);
+      activeProbes.delete(t.id);
+      toStart.push(t);
+    } else if (changed) {
+      logger.info({ targetId: t.id, host: t.host }, 'Target definition changed');
+    }
+  }
 
-  const spreadMs = Math.min(
-    60_000,
-    Math.min(...toSchedule.map((t) => t.interval_seconds * 1000))
-  );
+  if (toStart.length === 0) return;
 
-  toSchedule.forEach((target, i) => {
-    const staggerMs = toSchedule.length > 1
-      ? Math.floor((spreadMs / toSchedule.length) * i)
-      : 0;
-    scheduleTarget(target, staggerMs);
+  // Spread first probes over (up to) a minute so a restart doesn't fire everything at
+  // once. Each target is spread within its OWN interval — previously the shortest
+  // interval of any target squeezed the whole fleet into that window.
+  toStart.forEach((target, i) => {
+    const spreadMs = Math.min(60_000, target.interval_seconds * 1000);
+    const staggerMs = toStart.length > 1 ? Math.floor((spreadMs / toStart.length) * i) : 0;
+    const entry = { target, timer: null, interval: null, running: false };
+    activeProbes.set(target.id, entry);
+    startEntry(entry, staggerMs);
     logger.info({ targetId: target.id, host: target.host, staggerMs }, 'Target scheduled');
   });
 
-  if (brandNew.length > 0) {
+  if (brandNew.length > 0 && !startupPhase) {
     logger.info({ count: brandNew.length }, 'New targets detected — scheduling traceroute backfill');
     setTimeout(
       () => refreshStaleTraceroutes().catch((err) => logger.error({ err }, 'New-target traceroute failed')),
@@ -209,6 +195,8 @@ function loadAndScheduleTargets() {
     );
   }
 }
+
+let startupPhase = true;
 
 function refreshStaleTraceroutes() {
   return runTracerouteBackfill({
@@ -219,17 +207,25 @@ function refreshStaleTraceroutes() {
   });
 }
 
+// ── Background jobs ─────────────────────────────────────────────────────────
+
+// Run `fn` every `ms`, never overlapping itself and never throwing out of the timer.
+function every(ms, name, fn) {
+  let running = false;
+  setInterval(async () => {
+    if (running || isShuttingDown) return;
+    running = true;
+    try { await fn(); } catch (err) { logger.error({ err }, `${name} failed`); }
+    finally { running = false; }
+  }, ms);
+}
+
 function startRollupJobs() {
-  try { backfillAggregates(); logger.info('Aggregate backfill complete'); }
-  catch (err) { logger.error({ err }, 'Aggregate backfill failed'); }
+  try { backfillAggregates(); logger.info('Aggregate catch-up complete'); }
+  catch (err) { logger.error({ err }, 'Aggregate catch-up failed'); }
 
-  setInterval(() => {
-    try { rollup5Min(); } catch (err) { logger.error({ err }, '5-min rollup failed'); }
-  }, 5 * 60 * 1000);
-
-  setInterval(() => {
-    try { rollup1Hour(); } catch (err) { logger.error({ err }, '1-hour rollup failed'); }
-  }, 60 * 60 * 1000);
+  every(5 * 60 * 1000, '5-min rollup', rollup5Min);
+  every(60 * 60 * 1000, '1-hour rollup', rollup1Hour);
 
   function scheduleNightly() {
     const now = new Date();
@@ -238,8 +234,7 @@ function startRollupJobs() {
     if (next <= now) next.setDate(next.getDate() + 1);
 
     setTimeout(async () => {
-      const settings = loadSettings();
-      try { runRetention(settings); logger.info('Retention cleanup complete'); }
+      try { runRetention(loadSettings()); logger.info('Retention cleanup complete'); }
       catch (err) { logger.error({ err }, 'Retention cleanup failed'); }
 
       await refreshStaleTraceroutes().catch((err) => logger.error({ err }, 'Nightly traceroute refresh failed'));
@@ -251,14 +246,13 @@ function startRollupJobs() {
   setTimeout(() => refreshStaleTraceroutes().catch((err) => logger.error({ err }, 'Startup traceroute refresh failed')), 30_000);
 }
 
+// ── Lifecycle ───────────────────────────────────────────────────────────────
+
 async function shutdown() {
   logger.info('Probe worker shutting down...');
   isShuttingDown = true;
 
-  for (const entry of activeProbes.values()) {
-    clearInterval(entry.interval);
-    clearTimeout(entry.timer);
-  }
+  for (const entry of activeProbes.values()) stopEntry(entry);
 
   const deadline = Date.now() + 30_000;
   while (inFlightCount > 0 && Date.now() < deadline) {
@@ -274,7 +268,19 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 logger.info('Meridian probe worker starting...');
+requireSchema();
 loadAndScheduleTargets();
+startupPhase = false;
 startRollupJobs();
 
+// Pick up admin changes within seconds. SQLite's data_version changes whenever ANOTHER
+// connection commits, so this is a free "did the admin write anything?" check. The
+// 5-minute full reload stays as a safety net.
+let lastDataVersion = getDb().pragma('data_version', { simple: true });
+setInterval(() => {
+  try {
+    const v = getDb().pragma('data_version', { simple: true });
+    if (v !== lastDataVersion) { lastDataVersion = v; maintenance.invalidate(); loadAndScheduleTargets(); }
+  } catch (err) { logger.error({ err }, 'Change check failed'); }
+}, 10_000);
 setInterval(loadAndScheduleTargets, 5 * 60 * 1000);

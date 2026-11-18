@@ -1,128 +1,112 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useTargets, useGroups, useMutate } from '../hooks/useApi';
+import { useTargets, useGroups, useIncidents, useMaintenance, useMutate } from '../hooks/useApi';
 import TargetModal from '../components/TargetModal';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
+import { fmtDuration, fmtDateTime } from '../lib';
 
-const STATUS_COLOR = {
-  UP:       'var(--success)',
-  DEGRADED: 'var(--warning)',
-  DOWN:     'var(--danger)',
-  UNKNOWN:  'var(--text-muted)',
-};
-
-const STATUS_BG = {
-  UP:       'rgba(34,197,94,0.08)',
-  DEGRADED: 'rgba(245,158,11,0.08)',
-  DOWN:     'rgba(239,68,68,0.08)',
-  UNKNOWN:  'rgba(148,163,184,0.08)',
-};
+const TILES = [
+  { key: 'UP', label: 'Up', color: 'var(--success)', bg: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.25)' },
+  { key: 'DEGRADED', label: 'Degraded', color: 'var(--warning)', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.25)' },
+  { key: 'DOWN', label: 'Down', color: 'var(--danger)', bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.25)' },
+  { key: 'MAINT', label: 'Maintenance', color: 'var(--maint)', bg: 'rgba(139,92,246,0.1)', border: 'rgba(139,92,246,0.3)' },
+  { key: 'UNKNOWN', label: 'Unknown', color: 'var(--text-muted)', bg: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.2)' },
+];
 
 export default function AdminDashboard() {
   const targets = useTargets();
   const groups = useGroups();
+  const incidents = useIncidents('open', 100);
+  const maintenance = useMaintenance();
   const { toasts, toast } = useToast();
   const [editing, setEditing] = useState(null);
-  const disableMut = useMutate(['admin-targets']);
-  const deleteMut = useMutate(['admin-targets']);
+  const ackMut = useMutate(['admin-incidents']);
 
-  const all = targets.data || [];
-  const enabled = all.filter((t) => t.enabled);
-  const counts = { UP: 0, DEGRADED: 0, DOWN: 0, UNKNOWN: 0 };
-  for (const t of enabled) counts[t.status] = (counts[t.status] || 0) + 1;
+  const enabled = (targets.data || []).filter((t) => t.enabled);
+  const counts = { UP: 0, DEGRADED: 0, DOWN: 0, MAINT: 0, UNKNOWN: 0 };
+  for (const t of enabled) counts[t.in_maintenance ? 'MAINT' : (t.status in counts ? t.status : 'UNKNOWN')]++;
 
-  const problems = enabled
-    .filter((t) => t.status === 'DOWN' || t.status === 'DEGRADED')
-    .sort((a, b) => (a.status === 'DOWN' ? -1 : 1) - (b.status === 'DOWN' ? -1 : 1) || a.name.localeCompare(b.name));
+  const open = incidents.data || [];
+  const activeMaint = (maintenance.data || []).filter((w) => w.active);
+  // Down/degraded targets that don't (yet) have an incident, e.g. still inside the confirmation window
+  const incidentTargets = new Set(open.map((i) => i.target_id));
+  const degraded = enabled.filter((t) => t.status === 'DEGRADED' && !t.in_maintenance);
+  const pending = enabled.filter((t) => t.status === 'DOWN' && !t.in_maintenance && !incidentTargets.has(t.id));
 
-  async function disableTarget(t) {
-    try {
-      await disableMut.mutateAsync({ url: `/api/admin/targets/${t.id}/enabled`, method: 'PATCH', body: { enabled: 0 } });
-      toast(`${t.name} disabled`);
-    } catch (err) { toast(err.message, 'error'); }
-  }
-
-  async function deleteTarget(t) {
-    if (!confirm(`Delete target "${t.name}"?`)) return;
-    try {
-      await deleteMut.mutateAsync({ url: `/api/admin/targets/${t.id}`, method: 'DELETE' });
-      toast(`${t.name} deleted`);
-    } catch (err) { toast(err.message, 'error'); }
+  async function quickAck(i) {
+    try { await ackMut.mutateAsync({ url: `/api/admin/incidents/${i.id}/ack`, method: 'POST', body: {} }); toast(`Acknowledged ${i.target_name}`); }
+    catch (err) { toast(err.message, 'error'); }
   }
 
   return (
     <div>
-      <div className="page-header">
-        <h1 className="page-title">Dashboard</h1>
-      </div>
+      <div className="page-header"><h1 className="page-title">Dashboard</h1></div>
 
-      {/* Status summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
-        {['UP', 'DEGRADED', 'DOWN', 'UNKNOWN'].map((s) => (
-          <div key={s} className="card" style={{ background: STATUS_BG[s], borderColor: STATUS_COLOR[s] + '33' }}>
-            <div style={{ fontSize: 11, color: STATUS_COLOR[s], textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4, fontWeight: 600 }}>{s}</div>
-            <div style={{ fontSize: 32, fontWeight: 700, color: STATUS_COLOR[s] }}>{targets.isLoading ? '—' : counts[s]}</div>
+      {activeMaint.length > 0 && (
+        <div className="notice maint">
+          <strong>Maintenance in progress:</strong>{' '}
+          {activeMaint.map((w) => `${w.name} (${w.scope_name}, until ${fmtDateTime(w.occurrence_end)})`).join(' · ')}
+          {' '}<Link to="/maintenance">Manage</Link>
+        </div>
+      )}
+
+      <div className="tiles">
+        {TILES.map((t) => (
+          <div key={t.key} className="card tile" style={{ background: t.bg, borderColor: t.border }}>
+            <div className="tile-label" style={{ color: t.color }}>{t.label}</div>
+            <div className="tile-value" style={{ color: t.color }}>{targets.isLoading ? '—' : counts[t.key]}</div>
           </div>
         ))}
       </div>
 
-      {/* Problem targets */}
-      {problems.length > 0 && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--danger)' }}>
-            Problems — {problems.length} target{problems.length !== 1 ? 's' : ''} need attention
-          </h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Group</th>
-                <th>Host</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {problems.map((t) => (
-                <tr key={t.id}>
-                  <td style={{ fontWeight: 500 }}>{t.name}</td>
-                  <td style={{ color: 'var(--text-muted)' }}>{t.group_name}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{t.host}</td>
-                  <td><span className={`badge badge-${t.status.toLowerCase()}`}>{t.status}</span></td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn-ghost btn-sm" onClick={() => setEditing(t)}>Edit</button>
-                      <button className="btn-ghost btn-sm" onClick={() => disableTarget(t)}>Disable</button>
-                      <button className="btn-danger btn-sm" onClick={() => deleteTarget(t)}>Delete</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="card section">
+        <h2 className="card-title" style={{ color: open.length ? 'var(--danger)' : 'var(--success)' }}>
+          {open.length ? `${open.length} open incident${open.length !== 1 ? 's' : ''}` : 'All clear — no open incidents'}
+        </h2>
+        {open.length > 0 && (
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Target</th><th>Group</th><th>Down for</th><th></th></tr></thead>
+              <tbody>
+                {open.map((i) => (
+                  <tr key={i.id}>
+                    <td style={{ fontWeight: 500 }}>{i.target_name}<div className="mono muted" style={{ fontSize: 11 }}>{i.target_host}</div></td>
+                    <td className="muted">{i.group_name}</td>
+                    <td>{fmtDuration(Math.floor(Date.now() / 1000) - i.started_at)}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      {i.ack_at ? <span className="badge badge-ack">Acknowledged by {i.ack_by}</span>
+                        : i.maintenance ? <span className="badge badge-maint">Maintenance</span>
+                        : <button className="btn-sm" disabled={ackMut.isPending} onClick={() => quickAck(i)}>Acknowledge</button>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {(pending.length > 0 || degraded.length > 0) && (
+          <p className="muted help" style={{ marginTop: 12 }}>
+            {pending.length > 0 && <>Failing but not yet confirmed: {pending.map((t) => t.name).join(', ')}. </>}
+            {degraded.length > 0 && <>Degraded (partial packet loss): {degraded.map((t) => t.name).join(', ')}. </>}
+          </p>
+        )}
+        <p style={{ marginTop: 12, fontSize: 13 }}><Link to="/incidents">All incidents →</Link></p>
+      </div>
 
-      {/* Quick links */}
       <div className="card">
-        <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Quick Links</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <Link to="/targets">→ Manage Targets</Link>
-          <Link to="/groups">→ Manage Groups</Link>
-          <Link to="/settings">→ Settings & Users</Link>
+        <h2 className="card-title">Quick links</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+          <Link to="/targets">→ Manage targets</Link>
+          <Link to="/maintenance">→ Schedule maintenance</Link>
+          <Link to="/settings?tab=alerting">→ Alerting &amp; notification channels</Link>
+          <Link to="/settings?tab=account">→ Password &amp; two-factor authentication</Link>
         </div>
       </div>
 
       {editing && (
-        <TargetModal
-          target={editing}
-          groups={groups.data || []}
-          onSave={() => { setEditing(null); toast('Saved'); }}
-          onClose={() => setEditing(null)}
-        />
+        <TargetModal target={editing} groups={groups.data || []} onSave={() => { setEditing(null); toast('Saved'); }} onClose={() => setEditing(null)} />
       )}
-
       <Toast toasts={toasts} />
     </div>
   );

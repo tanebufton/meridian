@@ -3,7 +3,7 @@
 
 const readline = require('readline');
 const bcrypt = require('bcrypt');
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const { getDb, closeDb } = require('../server/db/db');
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -19,8 +19,8 @@ async function run() {
     process.exit(1);
   }
 
-  if (password.length < 8) {
-    console.error('Password must be at least 8 characters.');
+  if (password.length < 10) {
+    console.error('Password must be at least 10 characters.');
     process.exit(1);
   }
 
