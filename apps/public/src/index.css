@@ -748,3 +748,6 @@ button.btn-link { background: none; border: none; color: var(--accent); cursor: 
 .route-table td { line-height: 1.2; }
 .region-legend { flex-wrap: nowrap; }
 .region-legend .more { flex: none; }
+.route-table .aschip { margin-right: 10px; padding: 2px 9px; }
+.route-table td:first-child .muted { margin-left: 4px; }
+.route-table .aschip { min-width: 78px; text-align: center; box-sizing: border-box; }
