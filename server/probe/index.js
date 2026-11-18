@@ -9,6 +9,7 @@ const { tcpProbe } = require('./tcp');
 const { httpProbe } = require('./http');
 const { recalcUptime } = require('./uptime');
 const { rollup5Min, rollup1Hour, runRetention, backfillAggregates } = require('./rollup');
+const { runBackup } = require('../shared/backup');
 const { runTracerouteBackfill } = require('./traceroute-backfill');
 const { getStatus } = require('../shared/constants');
 const { probePercentiles } = require('../shared/stats');
@@ -241,6 +242,10 @@ function startRollupJobs() {
     setTimeout(async () => {
       try { runRetention(loadSettings()); logger.info('Retention cleanup complete'); }
       catch (err) { logger.error({ err }, 'Retention cleanup failed'); }
+      try {
+        const b = runBackup({ keep: loadSettings().backup_keep });
+        if (b) logger.info({ file: b.file, size: b.size, pruned: b.pruned }, 'Database backup complete');
+      } catch (err) { logger.error({ err }, 'Database backup failed'); }
 
       await refreshStaleTraceroutes().catch((err) => logger.error({ err }, 'Nightly traceroute refresh failed'));
       scheduleNightly();

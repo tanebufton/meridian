@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useMutate, useSettings, apiFetch } from '../../hooks/useApi';
+import { useMutate, useSettings, useBackups, apiFetch } from '../../hooks/useApi';
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -94,6 +94,50 @@ function TraceSettings({ toast }) {
   );
 }
 
+function Backups({ toast }) {
+  const q = useBackups();
+  const settings = useSettings();
+  const mut = useMutate(['admin-backups', 'admin-settings']);
+  const [keep, setKeep] = useState(null);
+  if (!q.data || !settings.data) return <div className="muted help">Loading…</div>;
+  const k = keep ?? settings.data.backup_keep ?? 7;
+  const mb = (n) => `${(n / 1048576).toFixed(n > 1.05e8 ? 0 : 1)} MB`;
+  async function now() {
+    try { await mut.mutateAsync({ url: '/api/admin/backups', method: 'POST' }); toast('Backup written'); }
+    catch (err) { toast(err.message, 'error'); }
+  }
+  async function save(e) {
+    e.preventDefault();
+    try { await mut.mutateAsync({ url: '/api/admin/settings', method: 'PUT', body: { backup_keep: Number(k) } }); toast('Backup setting saved'); }
+    catch (err) { toast(err.message, 'error'); }
+  }
+  const newest = q.data.files[0];
+  const stale = newest && Date.now() / 1000 - newest.at > 2 * 86400;
+  return (
+    <div>
+      <p className="muted help" style={{ marginBottom: 12 }}>
+        A full copy of the database (history, users, settings) is written every night at 02:00 to <code>{q.data.dir}</code> and the oldest are removed.
+        {' '}Copy that folder somewhere else too: a backup on the same disk doesn't survive the disk. Files are readable only by the server's user because they contain password hashes.
+      </p>
+      {(q.data.keep > 0 && (!newest || stale)) && <div className="muted" style={{ color: 'var(--warning, #f59e0b)', marginBottom: 12, fontSize: 13 }}>{newest ? 'The newest backup is more than two days old.' : 'No backup has been taken yet. The first runs tonight at 02:00, or press Back up now.'}</div>}
+      <form onSubmit={save} style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 14 }}>
+        <div className="field" style={{ margin: 0, width: 200 }}>
+          <label>Backups to keep</label>
+          <input type="number" min={0} max={60} value={k} onChange={(e) => setKeep(e.target.value)} />
+        </div>
+        <button type="submit" className="btn-ghost" disabled={mut.isPending}>Save</button>
+        <button type="button" onClick={now} disabled={mut.isPending}>Back up now</button>
+        <span className="muted help">0 turns nightly backups off.</span>
+      </form>
+      {q.data.files.length === 0 ? <div className="muted help">No automatic backups yet.</div> : (
+        <table className="list-table"><thead><tr><th>Backup</th><th>Taken</th><th>Size</th></tr></thead><tbody>
+          {q.data.files.map((f) => <tr key={f.name}><td><code>{f.name}</code></td><td>{new Date(f.at * 1000).toLocaleString()}</td><td>{mb(f.size)}</td></tr>)}
+        </tbody></table>
+      )}
+    </div>
+  );
+}
+
 export default function Data() {
   const { toasts, toast } = useToast();
   const fileRef = useRef(null);
@@ -127,6 +171,11 @@ export default function Data() {
           <button className="btn-ghost" onClick={() => fileRef.current?.click()}>Import config…</button>
         </div>
         <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={pickFile} />
+      </div>
+
+      <div className="card section">
+        <h2 className="card-title">Database backups</h2>
+        <Backups toast={toast} />
       </div>
 
       <div className="card section">

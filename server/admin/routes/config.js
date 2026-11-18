@@ -39,6 +39,20 @@ const ImportSchema = z.object({
 module.exports = async function configRoutes(app) {
   const auth = { preHandler: requireAuth };
 
+  // GET /api/admin/backups: the automatic nightly database backups
+  app.get('/backups', auth, async () => {
+    const { listBackups, backupDir } = require('../../shared/backup');
+    return { dir: backupDir(), keep: require('../../shared/settings').loadSettings().backup_keep, files: listBackups() };
+  });
+
+  // POST /api/admin/backups: take one now
+  app.post('/backups', auth, async (req, reply) => {
+    const { runBackup, listBackups } = require('../../shared/backup');
+    const keep = require('../../shared/settings').loadSettings().backup_keep;
+    const r = runBackup({ keep: keep > 0 ? keep : 7 });
+    return reply.send({ ok: true, file: require('path').basename(r.file), files: listBackups() });
+  });
+
   // GET /api/admin/config/export
   app.get('/config/export', auth, async () => {
     const db = getDb();

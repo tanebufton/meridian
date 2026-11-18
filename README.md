@@ -184,6 +184,12 @@ Use the admin credentials you created during setup.
 
 ---
 
+## Backups
+
+Meridian writes a full copy of its SQLite database (history, users, settings) every night at 02:00 to `data/backups/` and keeps the newest 7 (change it, or set 0 to turn it off, in **Settings → Data → Database backups**, where you can also take one on demand). Files are created `0600`, because they contain password hashes and 2FA secrets.
+
+A backup on the same disk doesn't survive the disk: copy `data/backups/` somewhere else (rsync, restic, your NAS). To restore, stop the services, replace `data/meridian.db` with a backup file (and delete any `meridian.db-wal` / `-shm`), then start them again. `npm run migrate` also snapshots the database before changing its schema, and config imports take one first.
+
 ## Upgrade Steps
 
 ```bash

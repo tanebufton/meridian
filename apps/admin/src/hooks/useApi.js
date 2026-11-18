@@ -55,6 +55,10 @@ export function useSettings() {
   return useQuery({ queryKey: ['admin-settings'], queryFn: () => apiFetch('/api/admin/settings') });
 }
 
+export function useBackups() {
+  return useQuery({ queryKey: ['admin-backups'], queryFn: () => apiFetch('/api/admin/backups') });
+}
+
 export function useNotificationChannels() {
   return useQuery({ queryKey: ['admin-notifications'], queryFn: () => apiFetch('/api/admin/notifications') });
 }

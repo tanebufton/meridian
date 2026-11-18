@@ -35,6 +35,7 @@ function defaults() {
     traceroute_method: 'auto',
     notify_route_changes: false,  // tell chat channels when a confirmed route change is recorded
     own_asn: null,                // your network's AS number (optional; otherwise detected from traceroutes)
+    backup_keep: 7,               // nightly database backups to keep (0 = off)
     route_confirm_runs: 2,        // a changed AS path must be seen this many runs in a row to be recorded
     // Public banner
     banner_enabled: false,

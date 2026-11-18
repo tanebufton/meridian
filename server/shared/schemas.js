@@ -78,6 +78,7 @@ const SettingsSchema = z.object({
   renotify_minutes: z.number().int().min(0).max(10080).optional(),
   traceroute_method: z.enum(['auto', 'icmp', 'tcp', 'udp']).optional(),
   route_confirm_runs: z.number().int().min(1).max(5).optional(),
+  backup_keep: z.number().int().min(0).max(60).optional(),
   notify_route_changes: z.boolean().optional(),
   own_asn: z.number().int().min(1).max(4294967295).nullable().optional(),
   banner_enabled: z.boolean().optional(),
