@@ -11,6 +11,8 @@ function kind(c) {
   return { label: 'Mixed', cls: 'mixed' };
 }
 
+const short = (n) => (n || '').split(/,| - /)[0].replace(/\s+(Inc|LLC|AB|SAS|B\.V\.|Limited|Ltd|Corporation|Parent)\.?$/i, '').trim().slice(0, 22);
+
 export default function Routing() {
   const q = useRouting();
   if (q.isLoading) return <div className="spinner" />;
@@ -86,8 +88,8 @@ export default function Routing() {
               {g.carriers.map((c) => <i key={c.asn} title={`${c.name || `AS${c.asn}`}: ${c.count}`} style={{ flex: c.count, background: colour(c.asn) }} />)}
             </div>
             <div className="region-legend" title={g.carriers.map((c) => `${c.name || `AS${c.asn}`} ${c.count}`).join(', ')}>
-              {g.carriers.slice(0, 2).map((c) => <span key={c.asn}><b style={{ background: colour(c.asn) }} />{c.name || `AS${c.asn}`} {c.count}</span>)}
-              {g.carriers.length > 2 && <span className="muted">+{g.carriers.length - 2} more</span>}
+              {g.carriers[0] && <span><b style={{ background: colour(g.carriers[0].asn) }} />{short(g.carriers[0].name) || `AS${g.carriers[0].asn}`} {g.carriers[0].count}</span>}
+              {g.carriers.length > 1 && <span className="muted more">+{g.carriers.length - 1} more</span>}
             </div>
           </div>
         ))}
