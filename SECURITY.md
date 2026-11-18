@@ -11,9 +11,9 @@ Meridian ships with sensible defaults, but a few things are yours to get right:
 
 - **`SESSION_SECRET`** – `scripts/setup.sh` generates a random one. If you create `.env` by hand, use
   `openssl rand -hex 32`. It encrypts 2FA secrets, so keep it private and don't change it casually.
-- **The admin panel (`ADMIN_PORT`, default 3002) is plain HTTP and binds to `0.0.0.0` by default.**
-  Never expose it directly to the internet. Either set `ADMIN_HOST=127.0.0.1` and reach it through a
-  TLS-terminating tunnel/proxy, or keep it on a private network (LAN/Tailscale) behind a firewall.
+- **The admin panel (`ADMIN_PORT`, default 3002) is plain HTTP and binds to `127.0.0.1` by default.**
+  Never expose it directly to the internet. Reach it through a TLS-terminating tunnel/proxy, or set
+  `ADMIN_HOST=0.0.0.0` only on a private network (LAN/Tailscale) behind a firewall.
 - **Turn on two-factor authentication** (Settings → My account), especially if the admin panel is
   reachable through a tunnel.
 - **Behind a reverse proxy or Cloudflare Tunnel**, set `TRUST_CF_HEADERS=true` (proxy on the same

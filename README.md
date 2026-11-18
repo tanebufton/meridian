@@ -18,8 +18,17 @@ Modern network latency monitoring — a spiritual successor to SmokePing.
 **Admin — dashboard**
 ![Admin dashboard](docs/screenshots/admin-dashboard.png)
 
+**Public — incidents**
+![Public incidents](docs/screenshots/public-incidents.png)
+
 **Admin — targets**
 ![Admin targets](docs/screenshots/admin-targets.png)
+
+**Admin — incidents (acknowledge)**
+![Admin incidents](docs/screenshots/admin-incidents.png)
+
+**Admin — maintenance windows**
+![Admin maintenance](docs/screenshots/admin-maintenance.png)
 
 ---
 
@@ -33,7 +42,7 @@ Modern network latency monitoring — a spiritual successor to SmokePing.
                            │                         (127.0.0.1:3001)    │
                            │                              │               │
   Browser (admin)  ──────▶ │  LAN / Tailscale   ──▶ meridian-admin       │
-  (LAN/Tailscale only)     │                         (0.0.0.0:3002)      │
+  (LAN/Tailscale only)     │                         (ADMIN_HOST:3002)   │
                            │                              │               │
                            │                         meridian-probe       │
                            │                         (no HTTP port)       │
@@ -48,7 +57,7 @@ Modern network latency monitoring — a spiritual successor to SmokePing.
 | Port | Process | Bind | Exposure |
 |---|---|---|---|
 | 3001 | `meridian-api` | `127.0.0.1` | Cloudflare Tunnel only |
-| 3002 | `meridian-admin` | `0.0.0.0` | LAN / Tailscale only (never public) |
+| 3002 | `meridian-admin` | `127.0.0.1` (set `ADMIN_HOST` for LAN/Tailscale) | Never public |
 | — | `meridian-probe` | none | internal |
 
 ---
@@ -156,7 +165,7 @@ sudo ufw enable
 
 ## First Login
 
-Navigate to: `http://<tailscale-or-lan-ip>:3002`
+Navigate to: `http://127.0.0.1:3002` (or `http://<tailscale-or-lan-ip>:3002` after setting `ADMIN_HOST` in `.env`)
 
 Use the admin credentials you created during setup.
 
@@ -189,7 +198,7 @@ Copy `.env.example` to `.env` and edit before first run.
 | `DATABASE_PATH` | `./data/meridian.db` | SQLite database path |
 | `SESSION_SECRET` | — | **Must be changed** — random 32-byte string. Also encrypts 2FA secrets, so changing it later disables everyone's 2FA |
 | `PUBLIC_HOST` | `127.0.0.1` | Interface the public API binds to |
-| `ADMIN_HOST` | `0.0.0.0` | Interface the admin server binds to (`127.0.0.1` = tunnel/local only) |
+| `ADMIN_HOST` | `127.0.0.1` | Interface the admin server binds to. Set `0.0.0.0` (or a LAN/Tailscale IP) to reach it over a trusted network |
 | `TRUST_CF_HEADERS` | — | `true` when behind the Cloudflare Tunnel: trusts the loopback proxy for the real client IP (rate limits, audit log) |
 | `TRUSTED_PROXIES` | — | Comma-separated proxy IPs to trust instead (e.g. `cloudflared` on another host) |
 | `METRICS_TOKEN` | — | Enables `/metrics` on the admin port (16+ characters, otherwise ignored); scrape with `Authorization: Bearer <token>` |
@@ -307,3 +316,9 @@ See also [SECURITY.md](SECURITY.md) for a deployment hardening checklist and how
 - Hosts are validated so they can never be parsed as command-line options by `ping`/`traceroute`
 - All SQL uses parameterised statements
 - Rate limiting on public API: 600 requests/minute per IP
+
+---
+
+## License
+
+[MIT](LICENSE) — use it, fork it, make your own version.

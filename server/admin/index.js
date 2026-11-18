@@ -119,9 +119,10 @@ async function start() {
   });
 
   const port = parseInt(process.env.ADMIN_PORT || '3002', 10);
-  // 0.0.0.0 keeps existing LAN/Tailscale access working; set ADMIN_HOST=127.0.0.1 to
-  // restrict the admin UI to the Cloudflare Tunnel / local access only
-  const host = process.env.ADMIN_HOST || '0.0.0.0';
+  // Loopback by default: the admin UI speaks plain HTTP, so it should only be reachable
+  // from outside this machine when you deliberately choose that. Set ADMIN_HOST=0.0.0.0
+  // (or a specific LAN/Tailscale address) to serve it on the network.
+  const host = process.env.ADMIN_HOST || '127.0.0.1';
   await app.listen({ port, host });
   app.log.info(`Admin server listening on ${host}:${port}`);
 }
