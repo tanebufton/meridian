@@ -11,7 +11,7 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'meridian-pub-'));
 const PORT = 20000 + Math.floor(Math.random() * 20000);
 const BASE = `http://127.0.0.1:${PORT}`;
 const root = path.join(__dirname, '..');
-const env = { ...process.env, DATABASE_PATH: path.join(dir, 'p.db'), PUBLIC_PORT: String(PORT), PUBLIC_HOST: '127.0.0.1', NODE_ENV: 'production' };
+const env = { ...process.env, DATABASE_PATH: path.join(dir, 'p.db'), PUBLIC_PORT: String(PORT), PUBLIC_HOST: '127.0.0.1', NODE_ENV: 'production', TRUST_CF_HEADERS: 'false', TRUSTED_PROXIES: '', METRICS_TOKEN: '' };
 process.env.DATABASE_PATH = env.DATABASE_PATH;
 let server;
 const get = async (u) => { const r = await fetch(BASE + u); const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = t; } return { status: r.status, body: j, headers: r.headers }; };
@@ -52,6 +52,15 @@ test.before(async () => {
   throw new Error('api did not start');
 });
 test.after(() => server?.kill());
+
+test('security headers: scripts are same-origin only; unsafe-inline is never allowed for scripts', async () => {
+  const csp = (await get('/health')).headers.get('content-security-policy');
+  const script = csp.match(/script-src ([^;]*)/)[1];
+  assert.equal(script, "'self'", 'no external script hosts unless explicitly running behind Cloudflare');
+  assert.ok(!/unsafe-inline|unsafe-eval/.test(script));
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.match((await get('/health')).headers.get('x-robots-tag') || '', /noindex/);
+});
 
 test('groups, summary and sidebar data only include public targets', async () => {
   const g = (await get('/api/v1/groups')).body;

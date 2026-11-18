@@ -25,10 +25,13 @@ function useTabTitle() {
 export default function App() {
   useTabTitle();
   const { pathname } = useLocation();
-  // Wall-board mode has no navigation chrome at all
-  if (pathname === '/tv') return <Suspense fallback={<div className="spinner" />}><TV /></Suspense>;
   // Return to the top on navigation (the content pane scrolls, not the window)
   useEffect(() => { document.querySelector('.content-area')?.scrollTo(0, 0); }, [pathname]);
+
+  // Wall-board mode has no navigation chrome at all. This early return MUST come after every hook:
+  // returning before one changes the hook count between renders and crashes the page (React #300)
+  // when you navigate to /tv from inside the app.
+  if (pathname === '/tv') return <Suspense fallback={<div className="spinner" />}><TV /></Suspense>;
 
   return (
     <div className="app-shell">

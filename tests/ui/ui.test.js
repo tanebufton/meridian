@@ -17,6 +17,8 @@ const PUB = rnd(), ADM = PUB + 1;
 const env = {
   ...process.env, DATABASE_PATH: path.join(dir, 'ui.db'), PUBLIC_PORT: String(PUB), PUBLIC_HOST: '127.0.0.1',
   ADMIN_PORT: String(ADM), ADMIN_HOST: '127.0.0.1', SESSION_SECRET: 'ui-test-secret-ui-test-secret-123456', NODE_ENV: 'production',
+  // pin what the tests depend on so a developer's real .env (loaded from the repo root) can't change the outcome
+  TRUST_CF_HEADERS: 'false', TRUSTED_PROXIES: '', METRICS_TOKEN: '',
 };
 process.env.DATABASE_PATH = env.DATABASE_PATH;
 
@@ -139,6 +141,23 @@ test('traceroute completeness notice: only for new-engine incomplete traces, nev
   assert.match(body, /previous traceroute engine/);
   await page.goto(P(`/target/${ids.t[0]}`)); await page.click('text=Traceroute'); await page.waitForSelector('table');
   assert.ok(!/destination itself didn't answer/.test(await page.textContent('body')), 'a complete trace shows no warning');
+  assert.deepEqual(page.errors, []);
+});
+
+test('sidebar: Incidents, Routing and TV mode sit together at the top, above the groups', async (t) => {
+  if (!guard(t)) return;
+  const page = await newPage();
+  await page.goto(P('/')); await page.waitForSelector('.sidebar-nav-link');
+  const links = await page.$$eval('.left-sidebar .sidebar-nav-link', (els) => els.map((e) => e.textContent.trim()));
+  assert.deepEqual(links, ['Incidents', 'Routing', 'TV mode ↗']);
+  const order = await page.evaluate(() => {
+    const tv = [...document.querySelectorAll('.sidebar-nav-link')].find((e) => /TV mode/.test(e.textContent));
+    const firstGroup = document.querySelector('.sidebar-group-row');
+    return tv.compareDocumentPosition(firstGroup) & Node.DOCUMENT_POSITION_FOLLOWING;
+  });
+  assert.ok(order, 'TV mode comes before the first group');
+  assert.equal(await page.locator('.tv-link').count(), 0, 'the old footer link is gone');
+  await page.click('text=TV mode'); await page.waitForSelector('.tvs');
   assert.deepEqual(page.errors, []);
 });
 

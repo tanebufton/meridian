@@ -95,6 +95,7 @@ export default function LeftSidebar() {
           <>
             <NavLink to="/incidents" className={({ isActive }) => `sidebar-nav-link ${isActive ? 'active' : ''}`}>Incidents</NavLink>
             <NavLink to="/routing" className={({ isActive }) => `sidebar-nav-link ${isActive ? 'active' : ''}`}>Routing</NavLink>
+            <Link to="/tv" className="sidebar-nav-link" title="Full-screen wall display that rotates through views">TV mode ↗</Link>
           </>
         )}
 
@@ -142,7 +143,6 @@ export default function LeftSidebar() {
         <div className="sidebar-foot">
           {lastUpdated && <div className="sidebar-updated">{lastUpdated}</div>}
           <ThemeToggle />
-          <Link to="/tv" className="tv-link" title="Full-screen wall display that rotates through views">TV mode ↗</Link>
         </div>
       </aside>
     </>

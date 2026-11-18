@@ -18,6 +18,10 @@ const env = {
   SESSION_SECRET: 'e2e-secret-e2e-secret-e2e-secret-1234',
   METRICS_TOKEN: 'e2e-metrics-token-0123456789',
   NODE_ENV: 'production',
+  // dotenv loads the repo's .env from the working directory; pin anything the tests depend on so a developer's
+  // real .env can't change the outcome
+  TRUST_CF_HEADERS: 'false',
+  TRUSTED_PROXIES: '',
 };
 process.env.DATABASE_PATH = env.DATABASE_PATH;
 process.env.SESSION_SECRET = env.SESSION_SECRET;

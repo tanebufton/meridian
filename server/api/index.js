@@ -20,6 +20,12 @@ const app = fastify({
   maxParamLength: 128,
 });
 
+// Behind a Cloudflare Tunnel, Cloudflare can auto-inject its Web Analytics beacon into every page. Allow that one
+// external script and its reporting endpoint so the console isn't full of CSP violations. 'unsafe-inline' is
+// never added: an injected INLINE script stays blocked (it is Cloudflare's, and harmless), and the app's own
+// scripts must still come from this origin. Turn off "Web Analytics" in Cloudflare if you'd rather it not inject.
+const behindCloudflare = process.env.TRUST_CF_HEADERS === 'true';
+
 async function start() {
   requireSchema();
 
@@ -28,10 +34,10 @@ async function start() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],          // no unsafe-inline for scripts
+        scriptSrc: ["'self'", ...(behindCloudflare ? ['https://static.cloudflareinsights.com'] : [])],  // no unsafe-inline for scripts
         styleSrc: ["'self'", "'unsafe-inline'"], // needed for React inline styles
         imgSrc: ["'self'", 'data:'],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", ...(behindCloudflare ? ['https://cloudflareinsights.com'] : [])],
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],          // no Flash / plugins
         mediaSrc: ["'none'"],
